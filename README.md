@@ -10,7 +10,7 @@
 
 ## 📌 Project Overview
 
-EduNexa AI is an Agentic AI-based academic learning assistant designed to help students learn from their own academic materials.
+VidyānVaya AI is an Agentic AI-based academic learning assistant designed to help students learn from their own academic materials.
 
 Students can upload materials such as:
 
@@ -34,13 +34,13 @@ Students often have their learning materials distributed across different source
 
 Finding relevant information, understanding topics, solving questions, identifying weak areas, and planning exam preparation can therefore become difficult and time-consuming.
 
-EduNexa AI aims to bring these materials together into one intelligent academic learning environment.
+VidyānVaya AI aims to bring these materials together into one intelligent academic learning environment.
 
 ---
 
 ## 💡 Proposed Solution
 
-EduNexa AI will provide a unified academic assistant that can:
+VidyānVaya AI will provide a unified academic assistant that can:
 
 1. Understand and process multiple academic document formats.
 2. Organize information from different sources.
@@ -59,7 +59,7 @@ The system will initially follow the **Track A foundation** described in the pro
 
 ## 🌐 Subject-Agnostic Approach
 
-A major design principle of EduNexa AI is **subject independence**.
+A major design principle of VidyānVaya AI is **subject independence**.
 
 The system will not be hard-coded for a particular academic subject.
 
