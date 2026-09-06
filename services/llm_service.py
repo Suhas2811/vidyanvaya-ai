@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from google import genai
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 load_dotenv()
@@ -9,19 +9,21 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-
 if not GEMINI_API_KEY:
     raise ValueError(
         "GEMINI_API_KEY is not set in the .env file."
     )
 
 
-client = genai.Client(
-    api_key=GEMINI_API_KEY
-)
-
-
 MODEL_NAME = "gemini-3.6-flash"
+
+
+llm = ChatGoogleGenerativeAI(
+    model=MODEL_NAME,
+    api_key=GEMINI_API_KEY,
+    temperature=1.0,
+    max_retries=2,
+)
 
 
 def generate_answer(question, context):
@@ -62,8 +64,9 @@ IMPORTANT RULES:
 7. If the academic context does not contain enough
    information, formula, concept, or method to answer the
    question reliably, say:
-   "I could not find enough information in the uploaded
-   materials to answer this question."
+
+"I could not find enough information in the uploaded
+materials to answer this question."
 
 8. Do not simply say that the exact answer is missing.
    First check whether the answer can be derived from the
@@ -82,9 +85,6 @@ Student Question:
 Now answer the student's question.
 """
 
-    interaction = client.interactions.create(
-        model=MODEL_NAME,
-        input=prompt
-    )
+    response = llm.invoke(prompt)
 
-    return interaction.output_text
+    return response.text

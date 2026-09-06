@@ -1,0 +1,15 @@
+streamlit
+python-dotenv
+
+chromadb
+sentence-transformers
+torch
+torchvision
+
+google-genai
+
+langchain
+langchain-google-genai
+langchain-openai
+langchain-ollama
+langchain-chroma

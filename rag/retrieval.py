@@ -2,22 +2,59 @@ from rag.embeddings import create_embeddings
 from rag.vector_store import collection
 
 
-def retrieve_relevant_chunks(query, n_results=5):
+def retrieve_relevant_chunks(
+    query,
+    source_name,
+    n_results=5
+):
     """
-    Retrieve the most relevant document chunks
-    for a user's question using semantic similarity.
+    Retrieve relevant chunks ONLY from the
+    selected academic document.
     """
 
-    query_embedding = create_embeddings([query])
-
-    results = collection.query(
-        query_embeddings=query_embedding.tolist(),
-        n_results=n_results
+    # Create embedding for the student's question
+    query_embedding = create_embeddings(
+        [query]
     )
 
-    if not results or "documents" not in results:
-        return []
+    if hasattr(query_embedding, "tolist"):
+        query_embedding = query_embedding.tolist()
 
-    documents = results["documents"][0]
+    # Find how many chunks belong to this document
+    document_chunks = collection.get(
+        where={
+            "source": source_name
+        }
+    )
 
-    return documents
+    total_chunks = len(
+        document_chunks["ids"]
+    )
+
+    if total_chunks == 0:
+
+        return {
+            "documents": [[]],
+            "distances": [[]],
+            "metadatas": [[]]
+        }
+
+    # Never request more results than available
+    n_results = min(
+        n_results,
+        total_chunks
+    )
+
+    results = collection.query(
+
+        query_embeddings=query_embedding,
+
+        n_results=n_results,
+
+        # THIS IS THE IMPORTANT FIX
+        where={
+            "source": source_name
+        }
+    )
+
+    return results
