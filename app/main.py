@@ -63,6 +63,10 @@ from services.question_bank_service import (
     extract_questions
 )
 
+from services.exam_prep_service import (
+    generate_practice_test,
+    evaluate_answer
+)
 
 # --------------------------------------------------
 # Streamlit configuration
@@ -821,6 +825,539 @@ Now provide the complete exam-oriented answer.
                     st.error(
                         f"❌ Could not solve the question: {e}"
                     )
+
+
+# ==================================================
+# WEEK 5 - EXAM PREPARATION
+# ==================================================
+
+st.divider()
+
+st.header("📝 Exam Preparation")
+
+st.write(
+    "Generate AI-powered practice questions from your "
+    "uploaded academic material and evaluate your answers."
+)
+
+exam_documents = get_document_names()
+
+if not exam_documents:
+
+    st.info(
+        "Upload and process academic material first "
+        "to start exam preparation."
+    )
+
+else:
+
+    st.subheader("📚 Practice Test Setup")
+
+    selected_exam_document = st.selectbox(
+        "Select study material",
+        exam_documents,
+        key="exam_prep_document_selector"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        exam_topic = st.text_input(
+            "Topic",
+            placeholder="Example: Computer Organization",
+            key="exam_prep_topic_input"
+        )
+
+    with col2:
+
+        exam_difficulty = st.selectbox(
+            "Difficulty",
+            [
+                "Easy",
+                "Medium",
+                "Hard"
+            ],
+            index=1,
+            key="exam_prep_difficulty_selector"
+        )
+
+    exam_question_count = st.slider(
+        "Number of questions",
+        min_value=1,
+        max_value=10,
+        value=3,
+        key="exam_prep_question_count"
+    )
+
+    if st.button(
+        "🎯 Generate Practice Test",
+        type="primary",
+        key="generate_practice_test_button"
+    ):
+
+        if not exam_topic.strip():
+
+            st.warning(
+                "Please enter a topic before generating "
+                "the practice test."
+            )
+
+        else:
+
+            try:
+
+                # ------------------------------------------
+                # Retrieve academic material
+                # ------------------------------------------
+
+                with st.spinner(
+                    "🔎 Searching your academic material..."
+                ):
+
+                    exam_results = retrieve_relevant_chunks(
+                        query=exam_topic,
+                        source_name=selected_exam_document,
+                        n_results=8
+                    )
+
+                exam_documents_found = exam_results.get(
+                    "documents",
+                    [[]]
+                )[0]
+
+                if not exam_documents_found:
+
+                    st.warning(
+                        "No relevant academic material was found "
+                        "for this topic."
+                    )
+
+                else:
+
+                    st.success(
+                        f"🔎 Found "
+                        f"{len(exam_documents_found)} "
+                        f"relevant academic chunks."
+                    )
+
+                    # ------------------------------------------
+                    # Build context
+                    # ------------------------------------------
+
+                    exam_context_parts = []
+
+                    for index, document in enumerate(
+                        exam_documents_found,
+                        start=1
+                    ):
+
+                        exam_context_parts.append(
+                            f"""
+ACADEMIC SOURCE {index}
+=======================
+
+{document}
+"""
+                        )
+
+                    exam_context = "\n".join(
+                        exam_context_parts
+                    )
+
+                    # ------------------------------------------
+                    # Generate practice questions
+                    # ------------------------------------------
+
+                    with st.spinner(
+                        "🤖 Generating practice questions..."
+                    ):
+
+                       practice_questions, provider_used = (
+                            generate_practice_test(
+                                academic_context=exam_context,
+                                number_of_questions=exam_question_count,
+                             difficulty=exam_difficulty,
+                            topic=exam_topic
+                         )
+                    )
+
+                    if not practice_questions:
+
+                        st.warning(
+                            "The AI could not generate practice "
+                            "questions from the selected material."
+                        )
+
+                    else:
+
+                        st.session_state[
+                            "exam_prep_questions"
+                        ] = practice_questions
+
+                        st.session_state[
+                            "exam_prep_provider"
+                        ] = provider_used
+
+                        st.session_state[
+                            "exam_prep_document"
+                        ] = selected_exam_document
+
+                        st.session_state[
+                            "exam_prep_topic"
+                        ] = exam_topic
+
+                        st.session_state[
+                            "exam_prep_difficulty"
+                        ] = exam_difficulty
+
+                        st.session_state[
+                            "exam_prep_context"
+                        ] = exam_context
+
+                        st.session_state[
+                            "exam_prep_source_chunks"
+                        ] = exam_documents_found
+
+                        # Clear previous evaluation
+                        st.session_state.pop(
+                            "exam_prep_results",
+                            None
+                        )
+
+                        st.success(
+                            f"✅ Generated "
+                            f"{len(practice_questions)} "
+                            f"practice questions."
+                        )
+
+                        st.caption(
+                            f"🤖 Generated by: "
+                            f"{provider_used.capitalize()}"
+                        )
+
+            except Exception as e:
+
+                st.error(
+                    f"❌ Could not generate practice test: {e}"
+                )
+
+    # ------------------------------------------------------
+    # Display generated practice test
+    # ------------------------------------------------------
+
+    if (
+        "exam_prep_questions"
+        in st.session_state
+        and st.session_state["exam_prep_questions"]
+    ):
+
+        st.divider()
+
+        st.subheader("📋 Practice Test")
+
+        practice_questions = st.session_state[
+            "exam_prep_questions"
+        ]
+
+        st.caption(
+            f"Study material: "
+            f"{st.session_state.get('exam_prep_document', 'Unknown')}"
+        )
+
+        st.caption(
+            f"Topic: "
+            f"{st.session_state.get('exam_prep_topic', 'Unknown')} "
+            f" | Difficulty: "
+            f"{st.session_state.get('exam_prep_difficulty', 'Medium')}"
+        )
+
+        for index, practice_question in enumerate(
+            practice_questions,
+            start=1
+        ):
+
+            question_number = practice_question.get(
+                "question_number",
+                index
+            )
+
+            question_text = practice_question.get(
+                "question",
+                practice_question.get(
+                    "question_text",
+                    ""
+                )
+            )
+
+            question_difficulty = practice_question.get(
+                "difficulty",
+                st.session_state.get(
+                    "exam_prep_difficulty",
+                    "Medium"
+                )
+            )
+
+            st.markdown(
+                f"### Question {question_number}"
+            )
+
+            st.write(
+                question_text
+            )
+
+            st.caption(
+                f"Difficulty: {question_difficulty}"
+            )
+
+            st.text_area(
+                "Your answer",
+                key=f"exam_answer_{index}",
+                height=160
+            )
+
+            st.divider()
+
+        # --------------------------------------------------
+        # Evaluate practice test
+        # --------------------------------------------------
+
+        if st.button(
+            "✅ Submit Practice Test",
+            type="primary",
+            key="submit_exam_prep_button"
+        ):
+
+            evaluation_results = []
+            total_score = 0
+
+            with st.spinner(
+                "🤖 Evaluating your answers..."
+            ):
+
+                for index, practice_question in enumerate(
+                    practice_questions,
+                    start=1
+                ):
+
+                    question_number = practice_question.get(
+                        "question_number",
+                        index
+                    )
+
+                    question_text = practice_question.get(
+                        "question",
+                        practice_question.get(
+                            "question_text",
+                            ""
+                        )
+                    )
+
+                    student_answer = st.session_state.get(
+                        f"exam_answer_{index}",
+                        ""
+                    )
+
+                    if not student_answer.strip():
+
+                        evaluation = {
+                            "result": "Not Attempted",
+                            "score": 0,
+                            "feedback":
+                                "No answer was provided.",
+                            "missing_points": [],
+                            "ideal_answer": ""
+                        }
+
+                    else:
+
+                        evaluation, evaluation_provider = (
+                            evaluate_answer(
+                                question=question_text,
+                                student_answer=student_answer,
+                                academic_context=st.session_state[
+                                    "exam_prep_context"
+                                ]
+                            )
+                        )
+
+                    score = evaluation.get(
+                        "score",
+                        0
+                    )
+
+                    try:
+                        score = float(score)
+                    except (TypeError, ValueError):
+                        score = 0
+
+                    total_score += score
+
+                    evaluation_results.append(
+                        {
+                            "question_number":
+                                question_number,
+                            "question":
+                                question_text,
+                            "student_answer":
+                                student_answer,
+                            "evaluation":
+                                evaluation
+                        }
+                    )
+
+            st.session_state[
+                "exam_prep_results"
+            ] = evaluation_results
+
+            st.session_state[
+                "exam_prep_total_score"
+            ] = total_score
+
+            st.success(
+                "✅ Practice test evaluated successfully."
+            )
+
+    # ------------------------------------------------------
+    # Display evaluation results
+    # ------------------------------------------------------
+
+    if (
+        "exam_prep_results"
+        in st.session_state
+    ):
+
+        st.divider()
+
+        st.subheader("📊 Your Performance")
+
+        evaluation_results = st.session_state[
+            "exam_prep_results"
+        ]
+
+        total_score = st.session_state.get(
+            "exam_prep_total_score",
+            0
+        )
+
+        max_score = len(evaluation_results) * 10
+
+        percentage = (
+            (total_score / max_score) * 100
+            if max_score > 0
+            else 0
+        )
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+
+            st.metric(
+                "Score",
+                f"{total_score:g}/{max_score}"
+            )
+
+        with col2:
+
+            st.metric(
+                "Percentage",
+                f"{percentage:.1f}%"
+            )
+
+        with col3:
+
+            st.metric(
+                "Questions",
+                len(evaluation_results)
+            )
+
+        # ----------------------------------------------
+        # Individual question evaluation
+        # ----------------------------------------------
+
+        for result in evaluation_results:
+
+            evaluation = result["evaluation"]
+
+            st.markdown(
+                f"### Question "
+                f"{result['question_number']}"
+            )
+
+            st.write(
+                result["question"]
+            )
+
+            st.markdown(
+                "**Your Answer:**"
+            )
+
+            if result["student_answer"].strip():
+
+                st.write(
+                    result["student_answer"]
+                )
+
+            else:
+
+                st.write(
+                    "*Not attempted*"
+                )
+
+            st.markdown(
+                f"**Result:** "
+                f"{evaluation.get('result', 'N/A')}"
+            )
+
+            st.markdown(
+                f"**Score:** "
+                f"{evaluation.get('score', 0)}/10"
+            )
+
+            st.markdown(
+                "**Feedback:**"
+            )
+
+            st.write(
+                evaluation.get(
+                    "feedback",
+                    "No feedback available."
+                )
+            )
+
+            missing_points = evaluation.get(
+                "missing_points",
+                []
+            )
+
+            if missing_points:
+
+                st.markdown(
+                    "**Points to Improve:**"
+                )
+
+                for point in missing_points:
+
+                    st.write(
+                        f"- {point}"
+                    )
+
+            ideal_answer = evaluation.get(
+                "ideal_answer",
+                ""
+            )
+
+            if ideal_answer:
+
+                with st.expander(
+                    "💡 View Ideal Answer"
+                ):
+
+                    st.write(
+                        ideal_answer
+                    )
+
+            st.divider()
 
 
 # --------------------------------------------------
