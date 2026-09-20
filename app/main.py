@@ -68,6 +68,10 @@ from services.exam_prep_service import (
     evaluate_answer
 )
 
+from services.performance_service import (
+    get_performance_summary
+)
+
 # --------------------------------------------------
 # Streamlit configuration
 # --------------------------------------------------
@@ -1216,6 +1220,25 @@ ACADEMIC SOURCE {index}
 
             st.success(
                 "✅ Practice test evaluated successfully."
+            )
+
+            # --------------------------------------------------
+            # Store practice test performance for Week 6
+            # --------------------------------------------------
+
+            if "performance_history" not in st.session_state:
+                st.session_state["performance_history"] = []
+
+            practice_record = {
+                "topic": exam_topic,
+                "difficulty": exam_difficulty,
+                "score": total_score,
+                "total_marks": len(evaluation_results) * 10,
+                "questions_attempted": len(evaluation_results),
+            }
+
+            st.session_state["performance_history"].append(
+                practice_record
             )
 
     # ------------------------------------------------------

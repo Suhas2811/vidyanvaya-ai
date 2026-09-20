@@ -6,12 +6,23 @@ from services.ai_provider import generate_with_fallback
 
 def clean_json_response(response):
     """
-    Remove Markdown code fences and surrounding whitespace
-    from an AI-generated JSON response.
+    Clean an AI-generated JSON response.
+
+    Handles:
+    - Leading/trailing whitespace
+    - Markdown code fences such as ```json ... ```
+    - Extra text before/after the JSON
     """
 
-    response = response.strip()
+    if response is None:
+        return ""
 
+    response = str(response).strip()
+
+    if not response:
+        return ""
+
+    # Remove Markdown code fences
     response = re.sub(
         r"^```(?:json)?\s*",
         "",
@@ -26,6 +37,84 @@ def clean_json_response(response):
     )
 
     return response.strip()
+
+
+def extract_json_array(response):
+    """
+    Extract a JSON array from an AI response.
+
+    This protects the application if the model returns
+    additional text around the JSON.
+    """
+
+    cleaned_response = clean_json_response(response)
+
+    if not cleaned_response:
+        raise ValueError(
+            "The AI returned an empty response."
+        )
+
+    start_index = cleaned_response.find("[")
+    end_index = cleaned_response.rfind("]")
+
+    if start_index == -1 or end_index == -1:
+        raise ValueError(
+            "Could not find a JSON array in the AI response.\n\n"
+            f"AI response:\n{cleaned_response[:1500]}"
+        )
+
+    json_text = cleaned_response[
+        start_index:end_index + 1
+    ]
+
+    try:
+        return json.loads(json_text)
+
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "Could not parse the AI response as JSON.\n\n"
+            f"Parser error: {error}\n\n"
+            f"AI response:\n{cleaned_response[:1500]}"
+        )
+
+
+def extract_json_object(response):
+    """
+    Extract a JSON object from an AI response.
+
+    This protects the application if the model returns
+    additional text around the JSON object.
+    """
+
+    cleaned_response = clean_json_response(response)
+
+    if not cleaned_response:
+        raise ValueError(
+            "The AI returned an empty response."
+        )
+
+    start_index = cleaned_response.find("{")
+    end_index = cleaned_response.rfind("}")
+
+    if start_index == -1 or end_index == -1:
+        raise ValueError(
+            "Could not find a JSON object in the AI response.\n\n"
+            f"AI response:\n{cleaned_response[:1500]}"
+        )
+
+    json_text = cleaned_response[
+        start_index:end_index + 1
+    ]
+
+    try:
+        return json.loads(json_text)
+
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "Could not parse the AI evaluation as JSON.\n\n"
+            f"Parser error: {error}\n\n"
+            f"AI response:\n{cleaned_response[:1500]}"
+        )
 
 
 def generate_practice_test(
@@ -82,9 +171,13 @@ Requirements:
    as conceptual, descriptive, application-based, or
    numerical questions when supported by the material.
 
-9. Do NOT provide explanations outside the JSON.
+9. Do NOT provide answers.
 
-10. Return ONLY valid JSON.
+10. Do NOT provide explanations outside the JSON.
+
+11. Return ONLY valid JSON.
+
+12. Do NOT use Markdown code fences.
 
 Use exactly this structure:
 
@@ -105,39 +198,41 @@ Return ONLY the JSON array.
 """
 
     try:
+
         response, provider_used = generate_with_fallback(
             "Generate an exam-style practice test.",
             prompt
         )
 
-        cleaned_response = clean_json_response(response)
-
-        questions = json.loads(cleaned_response)
-
-    except json.JSONDecodeError as error:
-        raise ValueError(
-            f"Could not parse the AI response as JSON: {error}"
-        )
+        questions = extract_json_array(response)
 
     except Exception as error:
+
         raise RuntimeError(
             f"Could not generate practice questions: {error}"
         )
 
     if not isinstance(questions, list):
+
         raise ValueError(
             "AI response is not a valid question list."
         )
 
     validated_questions = []
 
-    for index, question in enumerate(questions, start=1):
+    for index, question in enumerate(
+        questions,
+        start=1
+    ):
 
         if not isinstance(question, dict):
             continue
 
         question_text = str(
-            question.get("question", "")
+            question.get(
+                "question",
+                ""
+            )
         ).strip()
 
         if not question_text:
@@ -164,11 +259,20 @@ Return ONLY the JSON array.
         )
 
     if not validated_questions:
+
         raise ValueError(
-            "No valid practice questions were generated."
+            "The AI returned no valid practice questions."
         )
 
-    return validated_questions, provider_used
+    # Keep only the requested number of questions.
+    validated_questions = validated_questions[
+        :number_of_questions
+    ]
+
+    return (
+        validated_questions,
+        provider_used
+    )
 
 
 def evaluate_answer(
@@ -231,6 +335,8 @@ Evaluation requirements:
 
 9. Return ONLY valid JSON.
 
+10. Do NOT use Markdown code fences.
+
 Use exactly this structure:
 
 {{
@@ -247,66 +353,92 @@ Return ONLY the JSON object.
 """
 
     try:
+
         response, provider_used = generate_with_fallback(
             "Evaluate the student's academic answer.",
             prompt
         )
 
-        cleaned_response = clean_json_response(response)
-
-        evaluation = json.loads(cleaned_response)
-
-    except json.JSONDecodeError as error:
-        raise ValueError(
-            f"Could not parse the AI evaluation as JSON: {error}"
-        )
+        evaluation = extract_json_object(response)
 
     except Exception as error:
+
         raise RuntimeError(
             f"Could not evaluate the answer: {error}"
         )
 
     if not isinstance(evaluation, dict):
+
         raise ValueError(
             "AI response is not a valid evaluation object."
         )
 
     result = str(
-        evaluation.get("result", "")
+        evaluation.get(
+            "result",
+            ""
+        )
     ).strip()
 
     feedback = str(
-        evaluation.get("feedback", "")
+        evaluation.get(
+            "feedback",
+            ""
+        )
     ).strip()
 
     ideal_answer = str(
-        evaluation.get("ideal_answer", "")
+        evaluation.get(
+            "ideal_answer",
+            ""
+        )
     ).strip()
 
     if not result:
         result = "Not Evaluated"
 
     if not feedback:
-        feedback = "No detailed feedback was generated."
+        feedback = (
+            "No detailed feedback was generated."
+        )
 
     if not ideal_answer:
-        ideal_answer = "No ideal answer was generated."
+        ideal_answer = (
+            "No ideal answer was generated."
+        )
 
     try:
+
         score = float(
-            evaluation.get("score", 0)
+            evaluation.get(
+                "score",
+                0
+            )
         )
+
     except (TypeError, ValueError):
+
         score = 0
 
-    score = max(0, min(10, score))
+    # Keep score between 0 and 10.
+    score = max(
+        0,
+        min(
+            10,
+            score
+        )
+    )
 
     missing_points = evaluation.get(
         "missing_points",
         []
     )
 
-    if not isinstance(missing_points, list):
+    if not isinstance(
+        missing_points,
+        list
+    ):
+
         missing_points = []
 
     missing_points = [
@@ -323,4 +455,7 @@ Return ONLY the JSON object.
         "ideal_answer": ideal_answer
     }
 
-    return validated_evaluation, provider_used
+    return (
+        validated_evaluation,
+        provider_used
+    )
