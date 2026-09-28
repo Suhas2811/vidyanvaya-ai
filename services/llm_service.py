@@ -22,7 +22,8 @@ llm = ChatGoogleGenerativeAI(
     model=MODEL_NAME,
     api_key=GEMINI_API_KEY,
     temperature=1.0,
-    max_retries=2,
+    max_retries=0,
+    request_timeout=45,
 )
 
 
@@ -62,8 +63,8 @@ IMPORTANT RULES:
    requires a numerical solution.
 
 7. If the academic context does not contain enough
-   information, formula, concept, or method to answer the
-   question reliably, say:
+   information, formula, concept, or method to answer
+   the question reliably, say:
 
 "I could not find enough information in the uploaded
 materials to answer this question."
