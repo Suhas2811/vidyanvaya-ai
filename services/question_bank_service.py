@@ -4,25 +4,25 @@ import re
 from services.ai_provider import generate_with_fallback
 
 
-# ==================================================
-# JSON CLEANING
-# ==================================================
+# ============================================================
+# JSON HELPERS
+# ============================================================
 
 def _clean_json_response(response_text):
-    text = str(response_text).strip()
+    text = str(response_text or "").strip()
 
     if text.startswith("```"):
         text = re.sub(
             r"^```(?:json)?\s*",
             "",
             text,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         )
 
         text = re.sub(
             r"\s*```$",
             "",
-            text
+            text,
         )
 
     return text.strip()
@@ -44,192 +44,139 @@ def _extract_json_array(response_text):
     )
 
 
-# ==================================================
-# TEXT CLEANING
-# ==================================================
+# ============================================================
+# LINE CLEANING
+# ============================================================
 
 def _clean_line(line):
     """
-    Clean common PDF/OCR formatting noise while preserving
-    the actual question wording.
+    Clean a single extracted PDF line.
+
+    Important:
+    We do NOT remove question numbers here.
     """
 
-    line = str(line).strip()
+    line = str(line or "").strip()
 
     if not line:
         return ""
 
-    # Normalize repeated whitespace.
+    # Normalize whitespace.
     line = re.sub(
-        r"\s+",
+        r"[ \t]+",
         " ",
         line
-    )
-
-    # Remove trailing examination metadata such as:
-    # 10 L4 CO1
-    # 12 L2 CO3
-    line = re.sub(
-        r"\s+\d{1,3}\s+L\d+\s+CO\d+\s*$",
-        "",
-        line,
-        flags=re.IGNORECASE
-    )
-
-    # Remove metadata at the beginning.
-    line = re.sub(
-        r"^\d{1,3}\s+L\d+\s+CO\d+\s+",
-        "",
-        line,
-        flags=re.IGNORECASE
-    )
-
-    # Sometimes OCR produces:
-    # L4 CO1 b) Explain...
-    #
-    # Remove the metadata but preserve the sub-question.
-    line = re.sub(
-        r"^L\d+\s+CO\d+\s+",
-        "",
-        line,
-        flags=re.IGNORECASE
     )
 
     return line.strip()
 
 
+# ============================================================
+# METADATA DETECTION
+# ============================================================
+
 def _is_metadata_line(line):
     """
-    Identify lines that belong to the question-paper layout
-    rather than an actual question.
+    Detect university examination metadata.
+
+    Question numbers themselves are NOT metadata.
     """
+
+    line = str(line or "").strip()
 
     if not line:
         return True
 
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        line
-    ).strip()
-
+    # Common document/examination metadata.
     metadata_patterns = [
         r"^USN$",
         r"^PTO$",
-        r"^OR$",
         r"^Course\s*:",
         r"^Course Code\s*:",
         r"^Max Marks\s*:",
         r"^Duration\s*:",
         r"^Note\s*:",
         r"^DAYANANDA SAGAR",
+        r"^An Autonomous Institute",
         r"^Fifth Semester",
         r"^Semester End Examination",
-        r"^An Autonomous Institute",
-        r"^Module\s*[-–—]\s*\d+",
-        r"^Module\s+\d+",
+        r"^Module\s*[-–—]?\s*\d+",
         r"^Marks\s+BL\s+CO$",
+        r"^OR$",
+        r"^\*+$",
     ]
 
     for pattern in metadata_patterns:
-
         if re.search(
             pattern,
-            normalized,
+            line,
             flags=re.IGNORECASE
         ):
             return True
 
-    # Example:
+    # Examples:
     # 10 L4 CO1
-    # 12 L2 CO3
+    # 12 L3 CO2
+    # 8 L3 CO3
     if re.fullmatch(
         r"\d{1,3}\s+L\d+\s+CO\d+",
-        normalized,
+        line,
         flags=re.IGNORECASE
     ):
         return True
 
-    # IMPORTANT:
-    #
-    # Do NOT treat standalone numbers as metadata here.
-    #
-    # A university question paper may contain:
-    #
-    # 1
-    # 2
-    # 3
-    #
-    # and those are actual question numbers.
-    #
-    # Number detection happens BEFORE this function is
-    # called anyway, but keeping standalone numbers out
-    # of this filter makes the behaviour safer.
-    #
     return False
 
 
-# ==================================================
-# QUESTION PATTERN HELPERS
-# ==================================================
+# ============================================================
+# QUESTION START DETECTION
+# ============================================================
 
-def _match_subpart(line):
+def _match_question_start(line):
     """
-    Detect sub-question formats:
+    Detect a main question.
 
-        a)
-        b)
-        c)
-
-        (a)
-        (b)
-        (c)
-    """
-
-    match = re.match(
-        r"^\s*(\([a-z]\)|[a-z]\))\s*(.*)$",
-        line,
-        flags=re.IGNORECASE
-    )
-
-    if not match:
-        return None
-
-    marker = match.group(1)
-    text = match.group(2).strip()
-
-    return marker, text
-
-
-def _match_numbered_question(line):
-    """
-    Detect common university question formats.
-
-    Supported examples:
+    Handles:
 
         1
         1.
         1)
-        1: Explain...
+        1:
+        1 a)
+        1. a)
         Q1
         Q1.
-        Q1:
         Question 1
-        Question 1:
-        1 a) Explain...
-        1. a) Explain...
+
+    Returns:
+
+        {
+            "number": "1",
+            "subpart": "a)",
+            "text": "..."
+        }
+
+    or None.
     """
 
-    # --------------------------------------------------
-    # Question number
-    # --------------------------------------------------
+    line = str(line or "").strip()
+
+    if not line:
+        return None
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # We require the question number to be at the beginning.
+    # --------------------------------------------------------
 
     match = re.match(
-        r"^\s*(?:Q(?:uestion)?\s*)?(\d{1,2})"
-        r"(?:\s*[\.:)])?"
-        r"(?:\s+(.+))?\s*$",
+        r"^(?:Q(?:uestion)?\s*)?"
+        r"(\d{1,2})"
+        r"(?:[.):])?"
+        r"(?:\s+(.+))?$",
         line,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
 
     if not match:
@@ -239,106 +186,140 @@ def _match_numbered_question(line):
         match.group(1)
     )
 
+    # University papers normally have a small number
+    # of questions. Avoid interpreting arbitrary numbers
+    # inside text as question numbers.
+    if number < 1 or number > 50:
+        return None
+
     remainder = (
         match.group(2) or ""
     ).strip()
 
-    # Avoid interpreting random large numbers as
-    # question numbers.
-    if number < 1 or number > 50:
-        return None
-
-    # --------------------------------------------------
-    # Inline sub-question
-    #
-    # Example:
-    #
-    # 1 a) Explain Boolean retrieval.
-    # --------------------------------------------------
-
-    subpart = _match_subpart(
-        remainder
-    )
-
-    if subpart:
-
-        marker, text = subpart
-
-        return {
-            "number": number,
-            "subpart": marker,
-            "text": text
-        }
-
-    # --------------------------------------------------
-    # Metadata after question number
-    #
-    # Example:
+    # --------------------------------------------------------
+    # Metadata such as:
     #
     # 10 L4 CO1
     #
-    # This is not a question.
-    # --------------------------------------------------
+    # must NOT become a question.
+    # --------------------------------------------------------
 
     if re.fullmatch(
         r"L\d+\s+CO\d+",
         remainder,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     ):
         return None
 
-    # --------------------------------------------------
-    # Number-only question
+    # --------------------------------------------------------
+    # Detect inline subpart.
+    #
+    # Example:
+    #
+    # 1 a) Analyze...
+    # --------------------------------------------------------
+
+    subpart_match = re.match(
+        r"^(\([a-z]\)|[a-z]\))\s*(.*)$",
+        remainder,
+        flags=re.IGNORECASE,
+    )
+
+    if subpart_match:
+
+        return {
+            "number": str(number),
+            "subpart": subpart_match.group(1),
+            "text": subpart_match.group(2).strip(),
+        }
+
+    # --------------------------------------------------------
+    # Number-only question.
     #
     # Example:
     #
     # 1
-    # 2
-    # 3
     #
-    # These are valid question headers.
-    # --------------------------------------------------
+    # followed by:
+    #
+    # a) ...
+    # --------------------------------------------------------
 
     if not remainder:
 
         return {
-            "number": number,
+            "number": str(number),
             "subpart": None,
-            "text": ""
+            "text": "",
         }
 
-    # --------------------------------------------------
-    # Numbered question with text
-    # --------------------------------------------------
+    # --------------------------------------------------------
+    # Numbered question with text but no subpart.
+    # --------------------------------------------------------
 
     return {
-        "number": number,
+        "number": str(number),
         "subpart": None,
-        "text": remainder
+        "text": remainder,
     }
 
 
-# ==================================================
+# ============================================================
+# SUBPART DETECTION
+# ============================================================
+
+def _match_subpart(line):
+    """
+    Detect:
+
+        a) ...
+        b) ...
+        c) ...
+
+        (a) ...
+        (b) ...
+        (c) ...
+    """
+
+    line = str(line or "").strip()
+
+    match = re.match(
+        r"^(\([a-z]\)|[a-z]\))\s*(.*)$",
+        line,
+        flags=re.IGNORECASE,
+    )
+
+    if not match:
+        return None
+
+    return (
+        match.group(1),
+        match.group(2).strip(),
+    )
+
+
+# ============================================================
 # LOCAL QUESTION EXTRACTION
-# ==================================================
+# ============================================================
 
 def _extract_questions_locally(question_paper_text):
     """
-    Extract questions using deterministic rules.
+    Deterministically extract questions from a university
+    question paper.
 
-    This is preferred for normal university question papers
-    because it is fast and avoids unnecessary LLM calls.
+    This parser is intentionally local-first.
 
-    The parser:
+    It supports papers where the structure looks like:
 
-    - detects main question numbers
-    - detects (a), (b), (c) subparts
-    - keeps continuation lines
-    - ignores OR
-    - ignores marks / BL / CO metadata
-    - ignores module headings
-    - ignores examination instructions
-    - preserves numerical data belonging to questions
+        1 a) Question...
+        10 L4 CO1
+        b) Question...
+        10 L3 CO1
+        OR
+        2 a) Question...
+
+    It ignores examination metadata and keeps continuation
+    text and numerical data inside the correct question.
     """
 
     text = str(
@@ -361,7 +342,6 @@ def _extract_questions_locally(question_paper_text):
         "\n"
     )
 
-    # Clean individual lines.
     lines = []
 
     for raw_line in raw_lines:
@@ -375,83 +355,68 @@ def _extract_questions_locally(question_paper_text):
                 cleaned
             )
 
-    questions = []
+    # --------------------------------------------------------
+    # Internal representation:
+    #
+    # {
+    #     "number": "1",
+    #     "parts": [
+    #         "a) ...",
+    #         "b) ..."
+    #     ]
+    # }
+    # --------------------------------------------------------
+
+    question_map = {}
 
     current_question = None
-    current_part = None
-
-    # ==================================================
-    # IMPORTANT PARSING ORDER
-    # ==================================================
-    #
-    # 1. Numbered question
-    # 2. Sub-question
-    # 3. OR
-    # 4. Metadata
-    # 5. Continuation text
-    #
-    # Numbered questions MUST be detected before metadata.
-    # ==================================================
+    current_part_index = None
 
     for line in lines:
 
-        # --------------------------------------------------
-        # 1. Detect numbered question FIRST
-        # --------------------------------------------------
+        # ====================================================
+        # 1. MAIN QUESTION DETECTION
+        #
+        # THIS MUST COME FIRST.
+        # ====================================================
 
-        numbered = _match_numbered_question(
+        question_start = _match_question_start(
             line
         )
 
-        if numbered:
+        if question_start is not None:
 
-            number = numbered[
+            number = question_start[
                 "number"
             ]
 
-            subpart = numbered[
+            subpart = question_start[
                 "subpart"
             ]
 
-            question_text = numbered[
+            question_text = question_start[
                 "text"
             ]
 
-            # Find an existing question with this number.
-            existing = None
+            # Create question if not already present.
+            if number not in question_map:
 
-            for question in questions:
-
-                if (
-                    question["question_number"]
-                    == str(number)
-                ):
-                    existing = question
-                    break
-
-            # Create a new question if necessary.
-            if existing is None:
-
-                current_question = {
-                    "question_number": str(number),
-                    "parts": []
+                question_map[number] = {
+                    "question_number": number,
+                    "parts": [],
                 }
 
-                questions.append(
-                    current_question
-                )
+            current_question = question_map[
+                number
+            ]
 
-            else:
-
-                current_question = existing
-
-            # --------------------------------------------------
-            # Numbered line containing a subpart
+            # ------------------------------------------------
+            # Inline subpart.
             #
             # Example:
             #
             # 1 a) Analyze...
-            # --------------------------------------------------
+            # ------------------------------------------------
 
             if subpart:
 
@@ -467,7 +432,7 @@ def _extract_questions_locally(question_paper_text):
                     part_text
                 )
 
-                current_part = (
+                current_part_index = (
                     len(
                         current_question[
                             "parts"
@@ -475,9 +440,9 @@ def _extract_questions_locally(question_paper_text):
                     ) - 1
                 )
 
-            # --------------------------------------------------
-            # Numbered line containing question text
-            # --------------------------------------------------
+            # ------------------------------------------------
+            # Numbered question containing text.
+            # ------------------------------------------------
 
             elif question_text:
 
@@ -487,7 +452,7 @@ def _extract_questions_locally(question_paper_text):
                     question_text
                 )
 
-                current_part = (
+                current_part_index = (
                     len(
                         current_question[
                             "parts"
@@ -495,38 +460,29 @@ def _extract_questions_locally(question_paper_text):
                     ) - 1
                 )
 
-            # --------------------------------------------------
-            # Number-only line
+            # ------------------------------------------------
+            # Number-only question.
             #
-            # Example:
-            #
-            # 1
-            #
-            # The actual question comes on the next line.
-            # --------------------------------------------------
+            # The next a)/b)/text line belongs to it.
+            # ------------------------------------------------
 
             else:
 
-                current_part = None
+                current_part_index = None
 
             continue
 
-        # --------------------------------------------------
-        # 2. Detect sub-question
-        #
-        # Example:
-        #
-        # a) Analyze...
-        # b) Explain...
-        # --------------------------------------------------
+        # ====================================================
+        # 2. SUBPART DETECTION
+        # ====================================================
 
         subpart = _match_subpart(
             line
         )
 
         if (
-            subpart
-            and current_question
+            subpart is not None
+            and current_question is not None
         ):
 
             marker, question_text = subpart
@@ -543,7 +499,7 @@ def _extract_questions_locally(question_paper_text):
                 part_text
             )
 
-            current_part = (
+            current_part_index = (
                 len(
                     current_question[
                         "parts"
@@ -553,62 +509,77 @@ def _extract_questions_locally(question_paper_text):
 
             continue
 
-        # --------------------------------------------------
-        # 3. Ignore OR
-        # --------------------------------------------------
+        # ====================================================
+        # 3. OR
+        # ====================================================
 
         if re.fullmatch(
             r"OR",
             line,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         ):
-            current_part = None
+
+            # OR is a separator, not a question.
+            #
+            # Do NOT destroy current_question because the next
+            # numbered question should still be detected.
+            current_part_index = None
+
             continue
 
-        # --------------------------------------------------
-        # 4. Ignore metadata
-        # --------------------------------------------------
+        # ====================================================
+        # 4. METADATA
+        # ====================================================
 
         if _is_metadata_line(
             line
         ):
+
             continue
 
-        # --------------------------------------------------
-        # 5. Continuation line
-        #
-        # If the current question has a subpart,
-        # append the line to that subpart.
-        # --------------------------------------------------
+        # ====================================================
+        # 5. CONTINUATION TEXT
+        # ====================================================
 
         if (
-            current_question
-            and current_part is not None
-            and current_question[
-                "parts"
-            ]
+            current_question is not None
+            and current_part_index is not None
         ):
 
             current_question[
                 "parts"
-            ][current_part] += (
+            ][current_part_index] += (
                 " " + line
             )
 
 
-    # ==================================================
-    # CONVERT INTERNAL STRUCTURE
-    # ==================================================
+    # ========================================================
+    # BUILD FINAL LIST
+    # ========================================================
 
-    normalised = []
+    questions = []
 
-    for question in questions:
+    # Sort numerically:
+    #
+    # 1, 2, 3 ... 10
+    #
+    # instead of:
+    #
+    # 1, 10, 2 ...
+    # ========================================================
+
+    sorted_questions = sorted(
+        question_map.values(),
+        key=lambda item: int(
+            item["question_number"]
+        ),
+    )
+
+    for question in sorted_questions:
 
         parts = [
             part.strip()
-            for part in question[
-                "parts"
-            ]
+            for part in question["parts"]
             if part.strip()
         ]
 
@@ -619,121 +590,102 @@ def _extract_questions_locally(question_paper_text):
             parts
         ).strip()
 
-        normalised.append(
+        questions.append(
             {
                 "question_number": question[
                     "question_number"
                 ],
-                "question_text": question_text
+                "question_text": question_text,
             }
         )
 
-    # ==================================================
-    # REMOVE DUPLICATE QUESTION NUMBERS
-    # ==================================================
-
-    final_questions = []
-
-    seen_numbers = set()
-
-    for question in normalised:
-
-        number = question[
-            "question_number"
-        ]
-
-        if number in seen_numbers:
-            continue
-
-        seen_numbers.add(
-            number
-        )
-
-        final_questions.append(
-            question
-        )
-
-    return final_questions
+    return questions
 
 
-# ==================================================
-# QUESTION VALIDATION
-# ==================================================
+# ============================================================
+# LOCAL VALIDATION
+# ============================================================
 
-def _normalise_questions(
-    questions
+def _is_valid_local_result(
+    questions,
+    original_text,
 ):
     """
-    Validate and normalize AI-generated questions.
+    Validate whether local extraction produced a useful
+    question bank.
+
+    For a normal university paper, we expect at least
+    two numbered questions.
+
+    Also reject obvious metadata-only results.
     """
 
     if not isinstance(
         questions,
-        list
+        list,
     ):
-        raise ValueError(
-            "AI returned an invalid question list."
-        )
+        return False
 
-    normalised = []
+    if len(questions) < 2:
+        return False
 
-    for index, item in enumerate(
-        questions,
-        start=1
-    ):
+    valid_questions = 0
 
-        if not isinstance(
-            item,
-            dict
+    for question in questions:
+
+        number = str(
+            question.get(
+                "question_number",
+                "",
+            )
+        ).strip()
+
+        text = str(
+            question.get(
+                "question_text",
+                "",
+            )
+        ).strip()
+
+        if not number or not text:
+            continue
+
+        # Reject obvious metadata.
+        if re.search(
+            r"Duration\s*:",
+            text,
+            flags=re.IGNORECASE,
         ):
             continue
 
-        question_text = str(
-            item.get(
-                "question_text",
-                item.get(
-                    "question",
-                    ""
-                )
-            )
-        ).strip()
-
-        if not question_text:
+        if re.search(
+            r"Max Marks\s*:",
+            text,
+            flags=re.IGNORECASE,
+        ):
             continue
 
-        question_number = str(
-            item.get(
-                "question_number",
-                index
-            )
-        ).strip()
+        if re.search(
+            r"DAYANANDA SAGAR",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            continue
 
-        normalised.append(
-            {
-                "question_number": question_number,
-                "question_text": question_text
-            }
-        )
+        valid_questions += 1
 
-    if not normalised:
-
-        raise ValueError(
-            "No usable questions were returned by the AI."
-        )
-
-    return normalised
+    return valid_questions >= 2
 
 
-# ==================================================
-# AI QUESTION EXTRACTION
-# ==================================================
+# ============================================================
+# AI FALLBACK
+# ============================================================
 
 def _extract_questions_with_ai(
     question_paper_text
 ):
     """
-    AI fallback for question papers whose structure
-    cannot be reliably detected locally.
+    AI fallback for unusual question-paper layouts.
     """
 
     text = str(
@@ -745,11 +697,9 @@ def _extract_questions_with_ai(
             "Question paper text is empty."
         )
 
-    # Keep the input bounded.
     max_input_chars = 18000
 
     if len(text) > max_input_chars:
-
         text = text[
             :max_input_chars
         ]
@@ -767,25 +717,26 @@ Each item must contain exactly:
 
 Rules:
 
-1. Preserve the original question wording as closely as possible.
+1. Preserve the original wording as closely as possible.
 
-2. Keep sub-parts such as (a), (b), and (c) together with
-   their parent question.
+2. Preserve the original question numbers.
 
-3. Do NOT treat marks, BL, CO, module headings, duration,
-   examination instructions, OR, PTO, page numbers, or
-   university information as questions.
+3. Keep sub-parts such as (a), (b), and (c) together
+   inside their parent numbered question.
 
-4. Do NOT create explanations or answers.
+4. Do NOT treat Duration, Max Marks, USN, Course,
+   Course Code, Module, Marks, BL, CO, PTO, OR,
+   university information, or page numbers as questions.
 
-5. Do NOT invent missing text.
+5. Do NOT create questions that are not present.
 
 6. Do NOT split numerical data belonging to a question
    into separate questions.
 
-7. Preserve the question numbers from the paper.
+7. Preserve formulas, values, examples, and numerical
+   information belonging to a question.
 
-8. Keep each numbered examination question as one item.
+8. Return one object for each numbered main question.
 
 QUESTION PAPER:
 
@@ -795,7 +746,7 @@ QUESTION PAPER:
     response_text, provider_used = (
         generate_with_fallback(
             prompt,
-            ""
+            "",
         )
     )
 
@@ -809,33 +760,101 @@ QUESTION PAPER:
 
     return (
         questions,
-        provider_used
+        provider_used,
     )
 
 
-# ==================================================
-# MAIN EXTRACTION FUNCTION
-# ==================================================
+# ============================================================
+# AI RESULT NORMALIZATION
+# ============================================================
+
+def _normalise_questions(
+    questions
+):
+    """
+    Validate and normalize AI-generated questions.
+    """
+
+    if not isinstance(
+        questions,
+        list,
+    ):
+        raise ValueError(
+            "AI returned an invalid question list."
+        )
+
+    normalised = []
+
+    for index, item in enumerate(
+        questions,
+        start=1,
+    ):
+
+        if not isinstance(
+            item,
+            dict,
+        ):
+            continue
+
+        question_text = str(
+            item.get(
+                "question_text",
+                item.get(
+                    "question",
+                    "",
+                ),
+            )
+        ).strip()
+
+        if not question_text:
+            continue
+
+        question_number = str(
+            item.get(
+                "question_number",
+                index,
+            )
+        ).strip()
+
+        normalised.append(
+            {
+                "question_number": question_number,
+                "question_text": question_text,
+            }
+        )
+
+    if not normalised:
+        raise ValueError(
+            "No usable questions were returned by the AI."
+        )
+
+    return normalised
+
+
+# ============================================================
+# PUBLIC FUNCTION
+# ============================================================
 
 def extract_questions(
     question_paper_text
 ):
     """
-    Extract individual questions from a question paper.
+    Main Question Bank extraction function.
 
     Strategy:
 
-    1. Try deterministic local extraction first.
-    2. Validate the result.
-    3. If the structure cannot be reliably identified,
-       fall back to the configured AI providers.
+        PDF text
+             ↓
+        Local parser
+             ↓
+        Valid?
+        ↙     ↘
+      YES      NO
+       ↓        ↓
+     Local     AI fallback
 
-    Returns:
-
-        (
-            questions,
-            provider_used
-        )
+    Local extraction is preferred so that ordinary
+    university papers do not depend on an LLM.
     """
 
     text = str(
@@ -848,9 +867,9 @@ def extract_questions(
             "Question paper text is empty."
         )
 
-    # ==================================================
-    # LOCAL EXTRACTION
-    # ==================================================
+    # --------------------------------------------------------
+    # LOCAL FIRST
+    # --------------------------------------------------------
 
     local_questions = (
         _extract_questions_locally(
@@ -858,25 +877,23 @@ def extract_questions(
         )
     )
 
-    # ==================================================
-    # LOCAL RESULT VALIDATION
-    # ==================================================
+    # --------------------------------------------------------
+    # VALIDATE LOCAL RESULT
+    # --------------------------------------------------------
 
-    if len(local_questions) >= 2:
-
-        # The local parser successfully found
-        # a meaningful set of questions.
-        #
-        # Do NOT call Gemini unnecessarily.
+    if _is_valid_local_result(
+        local_questions,
+        text,
+    ):
 
         return (
             local_questions,
-            "local"
+            "local",
         )
 
-    # ==================================================
+    # --------------------------------------------------------
     # AI FALLBACK
-    # ==================================================
+    # --------------------------------------------------------
 
     return _extract_questions_with_ai(
         text
