@@ -6,3 +6,4 @@ chromadb/
 data/chroma_db/
 .DS_Store
 data/performance_history.json
+.streamlit/secrets.toml

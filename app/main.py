@@ -1,6 +1,8 @@
 import sys
 import time
 import json
+import html
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 
@@ -77,6 +79,590 @@ from services.performance_service import (
 
 
 # ==================================================
+# UI THEME + DASHBOARD (presentation layer only)
+# ==================================================
+
+# ==================================================
+# DESIGN TOKENS (taken from the Stitch prototype)
+# ==================================================
+
+NAVY = "#1e1b4b"
+INDIGO = "#4f46e5"
+INDIGO_SOFT = "#eef0ff"
+INK = "#14142b"
+MUTED = "#6b7280"
+LINE = "#e6e8f0"
+PAGE_BG = "#f6f7fb"
+
+
+# ==================================================
+# HELPERS
+# ==================================================
+
+def _html(markup: str) -> None:
+    """
+    Render raw HTML. Leading whitespace and blank lines are removed so
+    Streamlit's markdown parser never treats the HTML as a code block.
+    """
+    cleaned = "\n".join(
+        line.strip()
+        for line in markup.splitlines()
+        if line.strip()
+    )
+    st.markdown(cleaned, unsafe_allow_html=True)
+
+
+def _esc(value) -> str:
+    return html.escape(str(value))
+
+
+def _greeting() -> str:
+    hour = datetime.now().hour
+
+    if hour < 12:
+        return "Good morning"
+    if hour < 17:
+        return "Good afternoon"
+    return "Good evening"
+
+
+# ==================================================
+# GLOBAL THEME
+# ==================================================
+
+def inject_theme() -> None:
+    """Call once, right after st.set_page_config()."""
+
+    _html(f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+html, body, [class*="css"], .stApp {{
+    font-family: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+}}
+
+.stApp {{ background: {PAGE_BG}; }}
+
+#MainMenu, footer {{ visibility: hidden; }}
+header[data-testid="stHeader"] {{ background: transparent; }}
+
+.block-container {{
+    padding-top: 1.6rem;
+    padding-bottom: 3rem;
+    max-width: 1240px;
+}}
+
+h1, h2, h3 {{
+    color: {INK};
+    letter-spacing: -0.02em;
+    font-weight: 650;
+}}
+
+/* ---------- Sidebar ---------- */
+section[data-testid="stSidebar"] {{
+    background: #ffffff;
+    border-right: 1px solid {LINE};
+}}
+
+section[data-testid="stSidebar"] h1 {{
+    font-size: 1.15rem;
+    margin-bottom: 0;
+}}
+
+/* Navigation radio -> vertical menu */
+section[data-testid="stSidebar"] div[role="radiogroup"] {{
+    gap: 4px;
+}}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] > label {{
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    transition: background .15s ease;
+}}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {{
+    display: none;
+}}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:hover {{
+    background: #f1f2f9;
+}}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {{
+    background: {NAVY};
+}}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p {{
+    color: #ffffff;
+    font-weight: 600;
+}}
+
+section[data-testid="stSidebar"] div[role="radiogroup"] p {{
+    font-size: 0.9rem;
+    color: #374151;
+}}
+
+/* ---------- Mode switches inside pages (horizontal radios) ---------- */
+.stApp section.main div[role="radiogroup"][aria-orientation="horizontal"] > label,
+.stApp [data-testid="stMain"] div[role="radiogroup"][aria-orientation="horizontal"] > label {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-radius: 999px;
+    padding: 6px 16px;
+}}
+
+.stApp [data-testid="stMain"] div[role="radiogroup"][aria-orientation="horizontal"] > label:has(input:checked) {{
+    background: {INDIGO_SOFT};
+    border-color: {INDIGO};
+}}
+
+.stApp [data-testid="stMain"] div[role="radiogroup"][aria-orientation="horizontal"] > label > div:first-child {{
+    display: none;
+}}
+
+/* ---------- Metrics ---------- */
+div[data-testid="stMetric"] {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-radius: 14px;
+    padding: 14px 18px;
+}}
+
+div[data-testid="stMetricLabel"] p {{
+    color: {MUTED};
+    font-size: 0.8rem;
+}}
+
+div[data-testid="stMetricValue"] {{
+    color: {INK};
+    font-weight: 650;
+}}
+
+/* ---------- Buttons ---------- */
+.stButton > button {{
+    border-radius: 10px;
+    border: 1px solid {LINE};
+    font-weight: 550;
+    transition: border-color .15s ease, background .15s ease;
+}}
+
+.stButton > button:hover {{
+    border-color: {INDIGO};
+    color: {INDIGO};
+}}
+
+.stButton > button[kind="primary"] {{
+    background: {INDIGO};
+    border-color: {INDIGO};
+    color: #ffffff;
+}}
+
+.stButton > button[kind="primary"]:hover {{
+    background: #4338ca;
+    border-color: #4338ca;
+    color: #ffffff;
+}}
+
+/* ---------- Inputs ---------- */
+.stTextInput input, .stTextArea textarea, div[data-baseweb="select"] > div {{
+    border-radius: 10px;
+}}
+
+div[data-testid="stFileUploader"] section {{
+    border-radius: 14px;
+    border: 1.5px dashed #c7cbe6;
+    background: #ffffff;
+}}
+
+div[data-testid="stExpander"] {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-radius: 12px;
+}}
+
+/* ---------- Dashboard components ---------- */
+.vv-mono {{
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: .04em;
+}}
+
+.vv-eyebrow {{ color: {INDIGO}; margin-bottom: 2px; }}
+
+.vv-page-title {{
+    font-size: 1.7rem;
+    font-weight: 650;
+    color: {INK};
+    letter-spacing: -0.02em;
+    margin: 0;
+}}
+
+.vv-page-sub {{ color: {MUTED}; font-size: .88rem; margin: 2px 0 18px 0; }}
+
+.vv-hero {{
+    background: linear-gradient(135deg, #1b1846 0%, #2b2877 55%, #3a2f9c 100%);
+    border-radius: 20px;
+    padding: 30px 34px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    color: #ffffff;
+    margin-bottom: 14px;
+}}
+
+.vv-hero h2 {{
+    color: #ffffff;
+    font-size: 2rem;
+    margin: 12px 0 8px 0;
+}}
+
+.vv-hero p {{
+    color: #c7c9ee;
+    font-size: .9rem;
+    max-width: 520px;
+    margin: 0;
+    line-height: 1.55;
+}}
+
+.vv-pill {{
+    display: inline-block;
+    padding: 4px 11px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.12);
+    color: #dcdcff;
+}}
+
+.vv-hero-side {{
+    min-width: 240px;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 14px;
+    padding: 16px 18px;
+}}
+
+.vv-hero-side .vv-big {{ font-size: 1.5rem; font-weight: 650; margin: 4px 0; }}
+.vv-hero-side .vv-note {{ color: #a7f3d0; }}
+
+.vv-panel {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}}
+
+.vv-flow {{
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+}}
+
+.vv-step {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f5f6fb;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: .78rem;
+    font-weight: 600;
+    color: {INK};
+}}
+
+.vv-step i {{
+    font-style: normal;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    border-radius: 50%;
+    background: {INDIGO};
+    color: #ffffff;
+    font-size: .68rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}}
+
+.vv-stats {{
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 14px;
+}}
+
+.vv-stat {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-radius: 16px;
+    padding: 18px 20px;
+}}
+
+.vv-stat .vv-num {{
+    font-size: 1.9rem;
+    font-weight: 650;
+    color: {INK};
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}}
+
+.vv-stat .vv-label {{ color: {MUTED}; font-size: .84rem; margin-top: 2px; }}
+
+.vv-bar {{
+    height: 5px;
+    border-radius: 99px;
+    background: #e9ebf5;
+    margin-top: 12px;
+    overflow: hidden;
+}}
+
+.vv-bar > span {{
+    display: block;
+    height: 100%;
+    background: {INDIGO};
+    border-radius: 99px;
+}}
+
+.vv-rec {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-left: 4px solid #dc2626;
+    border-radius: 16px;
+    padding: 18px 22px;
+}}
+
+.vv-rec h3 {{ margin: 6px 0 6px 0; font-size: 1.15rem; }}
+.vv-rec p {{ color: #4b5563; margin: 0; font-size: .9rem; line-height: 1.55; }}
+
+@media (max-width: 900px) {{
+    .vv-hero {{ flex-direction: column; }}
+    .vv-flow {{ grid-template-columns: repeat(2, 1fr); }}
+    .vv-stats {{ grid-template-columns: repeat(2, 1fr); }}
+}}
+</style>
+""")
+
+
+# ==================================================
+# NAVIGATION CALLBACKS (used by the dashboard buttons)
+# ==================================================
+
+def _go(page, learn_mode=None, practice_mode=None) -> None:
+    st.session_state["main_navigation"] = page
+
+    if learn_mode:
+        st.session_state["learn_mode"] = learn_mode
+
+    if practice_mode:
+        st.session_state["practice_mode"] = practice_mode
+
+
+# ==================================================
+# DASHBOARD PAGE
+# ==================================================
+
+def render_dashboard(
+    user_name,
+    documents,
+    chunk_count,
+    questions,
+    history,
+    get_performance_summary,
+) -> None:
+    """
+    Dashboard built only from data your app already has.
+
+    documents               -> get_document_names()
+    chunk_count             -> get_collection_count()
+    questions               -> st.session_state["extracted_questions"]
+    history                 -> st.session_state["performance_history"]
+    get_performance_summary -> your existing function
+    """
+
+    summary = None
+
+    if history:
+        try:
+            summary = get_performance_summary(history)
+        except Exception:
+            summary = None
+
+    overall = (summary or {}).get("overall", {})
+    topics = (summary or {}).get("topic_performance", {})
+    recommendations = (summary or {}).get("recommendations", [])
+
+    tests = overall.get("tests_attempted", 0)
+    percentage = float(overall.get("percentage", 0) or 0)
+
+    doc_count = len(documents)
+
+    user_name = str(user_name or "").strip()
+    welcome_text = f"Welcome back, {_esc(user_name)}." if user_name else "Welcome back."
+    greeting_text = f"{_greeting()}, {_esc(user_name)}" if user_name else _greeting()
+
+    # ---------- Page heading ----------
+    _html(f"""
+<div class="vv-mono vv-eyebrow">KNOWLEDGE BASE · {chunk_count:,} CHUNKS INDEXED</div>
+<h1 class="vv-page-title">Dashboard</h1>
+<div class="vv-page-sub">{welcome_text} Continue learning from your academic knowledge base.</div>
+""")
+
+    # ---------- Hero ----------
+    if doc_count:
+        hero_text = (
+            f"VidyānVaya AI has indexed <b>{doc_count} "
+            f"academic material{'s' if doc_count != 1 else ''}</b> "
+            f"into {chunk_count:,} searchable chunks. "
+            f"Ask a question, solve a past paper, or take a practice test."
+        )
+    else:
+        hero_text = (
+            "Your knowledge base is empty. Upload notes, textbooks or "
+            "question papers to start learning."
+        )
+
+    side_value = f"{percentage:.0f}%" if tests else "—"
+    side_note = (
+        f"Across {tests} practice test{'s' if tests != 1 else ''}"
+        if tests
+        else "Take a practice test to start tracking"
+    )
+
+    _html(f"""
+<div class="vv-hero">
+<div>
+<span class="vv-pill vv-mono">SEMANTIC RAG ENGINE ONLINE</span>
+<h2>{greeting_text}</h2>
+<p>{hero_text}</p>
+</div>
+<div class="vv-hero-side">
+<div class="vv-mono" style="color:#c7c9ee">PRACTICE ACCURACY</div>
+<div class="vv-big">{side_value}</div>
+<div class="vv-mono vv-note">{_esc(side_note)}</div>
+</div>
+</div>
+""")
+
+    # ---------- Quick actions (real navigation) ----------
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        st.button(
+            "Upload material",
+            type="primary",
+            use_container_width=True,
+            key="dash_upload",
+            on_click=_go,
+            args=("📚 Materials",),
+        )
+
+    with c2:
+        st.button(
+            "Explain a topic",
+            use_container_width=True,
+            key="dash_explain",
+            on_click=_go,
+            args=("🧠 Learn", "🔍 Subject Guide"),
+        )
+
+    with c3:
+        st.button(
+            "Solve a question",
+            use_container_width=True,
+            key="dash_solve",
+            on_click=_go,
+            args=("🧠 Learn", "🧠 Question Solver"),
+        )
+
+    with c4:
+        st.button(
+            "Generate practice test",
+            use_container_width=True,
+            key="dash_practice",
+            on_click=_go,
+            args=("📝 Practice", None, "🎯 Exam Preparation"),
+        )
+
+    st.write("")
+
+    # ---------- Workflow strip ----------
+    steps = [
+        "Learn", "Practice", "Answer", "Evaluate",
+        "Analyze", "Revise", "Improve",
+    ]
+
+    step_html = "".join(
+        f'<div class="vv-step"><i>{number}</i>{name}</div>'
+        for number, name in enumerate(steps, start=1)
+    )
+
+    _html(f"""
+<div class="vv-panel">
+<div class="vv-mono" style="color:{MUTED}">MASTERY LIFECYCLE WORKFLOW</div>
+<div class="vv-flow">{step_html}</div>
+</div>
+""")
+
+    # ---------- Stat cards ----------
+    question_count = len(questions)
+    bar_width = max(0, min(100, percentage))
+
+    _html(f"""
+<div class="vv-stats">
+<div class="vv-stat">
+<div class="vv-num">{doc_count}</div>
+<div class="vv-label">Academic documents</div>
+<div class="vv-mono" style="color:{MUTED};margin-top:8px">{chunk_count:,} indexed chunks</div>
+</div>
+<div class="vv-stat">
+<div class="vv-num">{question_count}</div>
+<div class="vv-label">Extracted questions</div>
+<div class="vv-mono" style="color:{MUTED};margin-top:8px">from the current question bank</div>
+</div>
+<div class="vv-stat">
+<div class="vv-num">{percentage:.0f}%</div>
+<div class="vv-label">Practice accuracy</div>
+<div class="vv-bar"><span style="width:{bar_width}%"></span></div>
+</div>
+<div class="vv-stat">
+<div class="vv-num">{len(topics)}</div>
+<div class="vv-label">Topics tracked</div>
+<div class="vv-mono" style="color:{MUTED};margin-top:8px">{tests} test{'s' if tests != 1 else ''} attempted</div>
+</div>
+</div>
+""")
+
+    # ---------- Top recommendation ----------
+    if recommendations:
+        top = recommendations[0]
+
+        _html(f"""
+<div class="vv-rec">
+<div class="vv-mono" style="color:#dc2626">{_esc(str(top.get('priority', 'High')).upper())} PRIORITY RECOMMENDATION</div>
+<h3>{_esc(top.get('topic', 'Topic'))} needs more attention</h3>
+<p>Current performance: <b>{float(top.get('percentage', 0)):.1f}%</b>. {_esc(top.get('recommendation', ''))}</p>
+</div>
+""")
+
+    else:
+        _html("""
+<div class="vv-panel">
+<h3 style="margin:0 0 6px 0">No recommendations yet</h3>
+<p style="margin:0;color:#6b7280;font-size:.9rem">
+Complete a practice test and your weak areas and study
+recommendations will appear here.
+</p>
+</div>
+""")
+
+
+
+# ==================================================
 # STREAMLIT CONFIGURATION
 # ==================================================
 
@@ -85,6 +671,8 @@ st.set_page_config(
     page_icon="📚",
     layout="wide"
 )
+
+inject_theme()
 
 
 # ==================================================
@@ -1058,17 +1646,19 @@ def display_performance_dashboard():
 # HEADER
 # ==================================================
 
-st.title("📚 VidyānVaya AI")
+if st.session_state.get("main_navigation", "🏠 Dashboard") != "🏠 Dashboard":
 
-st.subheader(
-    "A Subject-Agnostic Academic Learning Assistant"
-)
+    st.title("📚 VidyānVaya AI")
 
-st.write(
-    "Upload your academic materials and use AI to "
-    "learn, solve questions, practice, analyze performance, "
-    "and improve."
-)
+    st.subheader(
+        "A Subject-Agnostic Academic Learning Assistant"
+    )
+
+    st.write(
+        "Upload your academic materials and use AI to "
+        "learn, solve questions, practice, analyze performance, "
+        "and improve."
+    )
 
 
 # ==================================================
@@ -1081,9 +1671,16 @@ st.sidebar.caption(
     "Academic Learning Assistant"
 )
 
+st.sidebar.text_input(
+    "Your name",
+    key="user_name",
+    placeholder="Optional"
+)
+
 page = st.sidebar.radio(
     "Navigate",
     [
+        "🏠 Dashboard",
         "📚 Materials",
         "🧠 Learn",
         "📝 Practice",
@@ -1112,10 +1709,26 @@ st.sidebar.metric(
 
 
 # ==================================================
+# PAGE 0 — DASHBOARD
+# ==================================================
+
+if page == "🏠 Dashboard":
+
+    render_dashboard(
+        user_name=st.session_state.get("user_name", ""),
+        documents=get_document_names(),
+        chunk_count=get_collection_count(),
+        questions=st.session_state["extracted_questions"],
+        history=st.session_state["performance_history"],
+        get_performance_summary=get_performance_summary,
+    )
+
+
+# ==================================================
 # PAGE 1 — MATERIALS
 # ==================================================
 
-if page == "📚 Materials":
+elif page == "📚 Materials":
 
     st.header("📚 Academic Materials")
 
