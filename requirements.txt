@@ -13,3 +13,5 @@ langchain-google-genai
 langchain-openai
 langchain-ollama
 langchain-chroma
+pymupdf==1.28.2
+pytesseract==0.3.13

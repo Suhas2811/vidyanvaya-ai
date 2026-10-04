@@ -27,6 +27,39 @@ llm = ChatGoogleGenerativeAI(
 )
 
 
+def _extract_text(response):
+    """
+    Convert a LangChain AIMessage response into plain text.
+
+    Different versions of LangChain/Google GenAI may return
+    response.content either as a string or as a list of
+    structured content blocks.
+    """
+
+    content = response.content
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        text_parts = []
+
+        for item in content:
+            if isinstance(item, str):
+                text_parts.append(item)
+
+            elif isinstance(item, dict):
+                if item.get("type") == "text":
+                    text = item.get("text", "")
+                    if text:
+                        text_parts.append(str(text))
+
+        if text_parts:
+            return "\n".join(text_parts).strip()
+
+    return str(content)
+
+
 def generate_answer(question, context):
     """
     Generate a grounded academic answer using
@@ -88,4 +121,4 @@ Now answer the student's question.
 
     response = llm.invoke(prompt)
 
-    return response.text
+    return _extract_text(response)

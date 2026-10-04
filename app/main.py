@@ -135,6 +135,55 @@ if "performance_history" not in st.session_state:
 
 
 # ==================================================
+# PERFORMANCE HISTORY PERSISTENCE
+# ==================================================
+
+PERFORMANCE_HISTORY_FILE = PROJECT_ROOT / "data" / "performance_history.json"
+
+
+def load_performance_history():
+    """Load saved practice-test history from disk."""
+    try:
+        if PERFORMANCE_HISTORY_FILE.exists():
+            with PERFORMANCE_HISTORY_FILE.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+
+            if isinstance(data, list):
+                return data
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    return []
+
+
+def save_performance_history(history):
+    """Save practice-test history to disk."""
+    try:
+        PERFORMANCE_HISTORY_FILE.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        with PERFORMANCE_HISTORY_FILE.open(
+            "w",
+            encoding="utf-8"
+        ) as file:
+            json.dump(
+                history,
+                file,
+                indent=2,
+                ensure_ascii=False
+            )
+    except OSError:
+        pass
+
+
+# Restore previous performance data when the app starts.
+if not st.session_state["performance_history"]:
+    st.session_state["performance_history"] = load_performance_history()
+
+
+# ==================================================
 # HELPER FUNCTIONS
 # ==================================================
 
@@ -653,27 +702,57 @@ Return one object for every answered question.
 
     elapsed = time.perf_counter() - start_time
 
-    cleaned = response_text.strip()
+    # Normalize the different response shapes that LangChain/Gemini may return.
+    if isinstance(response_text, list):
+        parts = []
+        for part in response_text:
+            if isinstance(part, dict):
+                if part.get("text"):
+                    parts.append(str(part["text"]))
+            elif isinstance(part, str):
+                parts.append(part)
+        cleaned = "\n".join(parts).strip()
+    elif isinstance(response_text, dict):
+        cleaned = str(response_text.get("text", response_text.get("content", response_text))).strip()
+    else:
+        cleaned = str(response_text).strip()
 
     if cleaned.startswith("```"):
         cleaned = cleaned.replace("```json", "", 1)
         cleaned = cleaned.replace("```", "", 1).strip()
 
-    start_index = cleaned.find("[")
-    end_index = cleaned.rfind("]")
+    evaluation_data = None
 
-    if start_index == -1 or end_index == -1:
-        raise ValueError(
-            "AI evaluation did not return a valid JSON array."
-        )
+    # First try parsing the entire response.
+    try:
+        evaluation_data = json.loads(cleaned)
+    except (json.JSONDecodeError, TypeError):
+        pass
 
-    evaluation_data = json.loads(
-        cleaned[start_index:end_index + 1]
-    )
+    # Then locate JSON embedded inside explanatory text.
+    if evaluation_data is None:
+        decoder = json.JSONDecoder()
+        positions = [p for p in (cleaned.find("["), cleaned.find("{")) if p >= 0]
+        for position in sorted(positions):
+            try:
+                candidate, _ = decoder.raw_decode(cleaned[position:])
+                evaluation_data = candidate
+                break
+            except json.JSONDecodeError:
+                continue
+
+    # Accept common wrapper formats such as {"results": [...]}.
+    if isinstance(evaluation_data, dict):
+        for key in ("results", "evaluations", "evaluation", "answers"):
+            if isinstance(evaluation_data.get(key), list):
+                evaluation_data = evaluation_data[key]
+                break
 
     if not isinstance(evaluation_data, list):
+        preview = cleaned[:500].replace("\n", " ")
         raise ValueError(
-            "AI evaluation returned an invalid result format."
+            "AI evaluation did not return a valid JSON array. "
+            f"Response preview: {preview}"
         )
 
     for item in evaluation_data:
@@ -2217,6 +2296,10 @@ elif page == "📝 Practice":
                         "performance_history"
                     ].append(
                         practice_record
+                    )
+
+                    save_performance_history(
+                        st.session_state["performance_history"]
                     )
 
                     st.success(

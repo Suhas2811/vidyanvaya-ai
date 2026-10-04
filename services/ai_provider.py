@@ -3,7 +3,13 @@ from services.openai_service import generate_openai_answer
 from services.ollama_service import generate_ollama_answer
 
 
+PROVIDER_ORDER = ["gemini", "openai", "ollama"]
+
+
 def generate_with_provider(provider, question, context):
+    """
+    Generate an answer using one explicitly selected provider.
+    """
 
     if provider == "gemini":
         return generate_answer(question, context)
@@ -18,35 +24,40 @@ def generate_with_provider(provider, question, context):
 
 
 def generate_with_fallback(question, context):
+    """
+    Try providers in order and immediately fall back when one
+    provider fails or times out.
 
-    providers = [
-        "gemini",
-        "openai",
-        "ollama",
-    ]
+    Provider order:
+        1. Gemini
+        2. OpenAI
+        3. Ollama
+    """
 
     errors = []
 
-    for provider in providers:
-
+    for provider in PROVIDER_ORDER:
         try:
             answer = generate_with_provider(
                 provider,
                 question,
-                context
+                context,
             )
 
-            return answer, provider
+            if answer is None or not str(answer).strip():
+                raise ValueError("Provider returned an empty response.")
+
+            return str(answer), provider
 
         except Exception as error:
+            error_message = str(error).strip()
 
-            error_message = str(error)
+            if not error_message:
+                error_message = error.__class__.__name__
 
             errors.append(
                 f"{provider.upper()}: {error_message}"
             )
-
-            continue
 
     raise RuntimeError(
         "All AI providers failed.\n\n"

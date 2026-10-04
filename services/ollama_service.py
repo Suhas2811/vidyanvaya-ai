@@ -4,45 +4,37 @@ from langchain_ollama import ChatOllama
 MODEL_NAME = "qwen3:4b"
 
 
-llm = ChatOllama(
-    model=MODEL_NAME,
-    temperature=0,
-)
-
-
 def generate_ollama_answer(question, context):
     """
-    Generate a grounded academic answer using
-    the local Ollama model.
+    Generate an academic answer using the local Ollama model.
+
+    Ollama is the final fallback provider, so it has a bounded
+    timeout to prevent the application from hanging indefinitely.
     """
+
+    llm = ChatOllama(
+        model=MODEL_NAME,
+        temperature=0.0,
+        timeout=45,
+    )
 
     prompt = f"""
 You are VidyānVaya AI, an academic learning assistant.
 
-Answer the student's question using the provided
-academic context as the primary source.
+Answer the student's question using the supplied academic
+context as the primary source.
 
-IMPORTANT RULES:
-
-1. Use the academic context for facts, definitions,
-   concepts, formulas, methods, and examples.
-
-2. You may solve numerical questions using formulas
-   and methods supported by the context.
-
-3. Do not introduce unrelated external information.
-
-4. Show calculation steps when required.
-
-5. If the context does not contain enough information
-   to answer reliably, say:
-
-"I could not find enough information in the uploaded
-materials to answer this question."
-
-6. Give a clear and student-friendly answer.
-
-7. Do not reveal your internal reasoning or thinking process.
+Rules:
+1. Stay grounded in the academic context.
+2. Use definitions, concepts, formulas, methods, and examples
+   supported by the context.
+3. You may perform calculations and logical reasoning using
+   concepts or formulas present in the context.
+4. Do not introduce unrelated external facts.
+5. If the context is insufficient to answer reliably, clearly
+   state that the uploaded materials do not contain enough
+   information.
+6. Give a clear, accurate, student-friendly answer.
 
 Academic Context:
 -----------------

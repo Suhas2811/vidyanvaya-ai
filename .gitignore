@@ -5,3 +5,4 @@ __pycache__/
 chromadb/
 data/chroma_db/
 .DS_Store
+data/performance_history.json
