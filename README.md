@@ -8,6 +8,19 @@
 
 ---
 
+# 🌐 Project Links
+
+### 🚀 Live Application
+
+https://vidyanvaya-ai.streamlit.app/
+
+### 💻 GitHub Repository
+
+https://github.com/Suhas2811/vidyanvaya-ai
+
+
+---
+
 # 📌 Project Overview
 
 VidyānVaya AI is an Agentic AI-based academic learning assistant designed to help students learn from their own academic materials.
@@ -1152,54 +1165,61 @@ The system has progressed from evaluating individual answers to analyzing studen
 
 ## Week 7 — UI, Integration & Refinement
 
-### Status: 🚧 Current Phase
+### Status: ✅ Completed
 
-Week 7 focuses on bringing all implemented modules together into a polished and unified academic learning platform.
+Week 7 focused on bringing all implemented modules together into a polished and unified academic learning platform.
 
-### Planned Work
+### Completed Work
 
-- Improve the overall Streamlit UI/UX
-- Integrate all major modules into a unified workflow
-- Improve navigation
-- Improve section organization
-- Improve visual consistency
-- Improve performance-result presentation
-- Improve weak-area and recommendation displays
-- Add useful performance visualizations where appropriate
-- Improve the overall student experience
-- Test complete end-to-end workflows
-- Fix integration issues and edge cases
-- Improve application stability
-- Improve usability
-- Refine the interface for final demonstration
+- Improved the overall Streamlit UI/UX
+- Integrated the major modules into a unified workflow
+- Improved navigation
+- Improved section organization
+- Improved visual consistency
+- Improved performance-result presentation
+- Improved weak-area and recommendation displays
+- Added performance visualizations where appropriate
+- Improved the overall student experience
+- Tested complete end-to-end workflows
+- Fixed integration issues and edge cases
+- Improved application stability
+- Improved usability
+- Refined the interface for the final demonstration
 
-### Expected Outcome
+### Outcome
 
-A unified and polished VidyānVaya AI application in which the document-processing, RAG, Question Bank, Question Solver, Exam Preparation, and Performance Analysis modules work together as a cohesive learning platform.
+A unified and polished VidyānVaya AI application in which document processing, RAG, Question Bank, Question Solver, Exam Preparation, and Performance Analysis work together as a cohesive learning platform.
 
 ---
 
 ## Week 8 — Deployment & Finalization
 
-### Status: 🔄 Planned
+### Status: ✅ Completed
 
-The final week will focus on preparing VidyānVaya AI for demonstration, deployment, and final submission.
+The final week focused on preparing VidyānVaya AI for deployment, demonstration, documentation, and final submission.
 
-### Planned Work
+### Completed Work
 
 - Final application testing
 - End-to-end testing
 - Bug fixing
 - Performance and reliability improvements
-- Deployment
+- Deployment to Streamlit Community Cloud
 - Final README and documentation updates
 - Project presentation preparation
-- Final demonstration preparation
+- Final demonstration recording
 - Final project submission
 
-### Expected Outcome
+### Outcome
 
-A deployed and polished subject-agnostic academic AI learning assistant ready for final demonstration and submission.
+A deployed and polished subject-agnostic academic AI learning assistant ready for demonstration and submission.
+
+### Deployment
+
+The final application is publicly available at:
+
+https://vidyanvaya-ai.streamlit.app/
+
 
 ---
 
@@ -1213,8 +1233,8 @@ A deployed and polished subject-agnostic academic AI learning assistant ready fo
 | Week 4 | Question Bank & Question Solver | ✅ Completed |
 | Week 5 | Exam Preparation Assistant | ✅ Completed |
 | Week 6 | Performance Analysis & Recommendations | ✅ Completed |
-| Week 7 | UI, Integration & Refinement | 🚧 In Progress |
-| Week 8 | Deployment & Finalization | 🔄 Planned |
+| Week 7 | UI, Integration & Refinement | ✅ Completed |
+| Week 8 | Deployment & Finalization | ✅ Completed |
 
 ---
 
@@ -1302,10 +1322,10 @@ VidyānVaya AI currently supports the following major workflow:
 | Weak-Area Detection | ✅ Completed |
 | Strong-Area Detection | ✅ Completed |
 | Personalized Recommendations | ✅ Completed |
-| Unified UI Refinement | 🚧 Week 7 |
-| Advanced Visualizations | 🚧 Week 7 |
-| Deployment | 🔄 Week 8 |
-| Final Documentation | 🔄 Week 8 |
+| Unified UI Refinement | ✅ Completed |
+| Advanced Visualizations | ✅ Completed |
+| Deployment | ✅ Completed |
+| Final Documentation | ✅ Completed |
 
 ---
 
@@ -1460,16 +1480,18 @@ Future evaluation will focus on:
 
 # 📌 Current Project Status
 
-## Development Status: Week 7 — UI, Integration & Refinement 🚧
+## Development Status: Week 8 — Deployment & Finalization ✅
 
-### Completed Through Week 6
+VidyānVaya AI has completed the planned 8-week development cycle.
+
+### Completed Through Week 8
 
 - Project foundation
 - Streamlit application
 - PDF processing
 - DOCX processing
 - PPTX processing
-- OCR for scanned PDFs
+- OCR support for scanned PDFs
 - Text chunking
 - Sentence Transformer embeddings
 - ChromaDB vector storage
@@ -1501,28 +1523,22 @@ Future evaluation will focus on:
 - Weak-area detection
 - Strong-area detection
 - Personalized study recommendations
-
-### Current Week 7 Focus
-
-- UI/UX improvement
-- Unified application workflow
-- Navigation improvements
-- Visual consistency
-- Performance-result presentation
-- Useful performance visualizations
+- Unified modern dashboard
+- UI/UX refinement
 - End-to-end testing
-- Integration fixes
-- Stability improvements
-- Usability improvements
-
-### Upcoming Week 8 Focus
-
 - Deployment
-- Final testing
-- Documentation
-- Presentation
-- Demonstration
-- Final submission
+- Final documentation
+- Demo recording
+- Final project submission
+
+### Deployment Status
+
+The application is deployed and publicly accessible:
+
+https://vidyanvaya-ai.streamlit.app/
+
+### Submission Status
+
 
 ---
 
@@ -1534,8 +1550,8 @@ Future evaluation will focus on:
 | Official Project | Subject Guide & Question Bank Assistant AI Agent |
 | Development Approach | RAG Foundation → Advanced Agentic Capabilities |
 | Duration | 8 Weeks |
-| Current Stage | Week 7 — UI, Integration & Refinement |
-| Completed Through | Week 6 |
+| Current Stage | Week 8 — Deployment & Finalization |
+| Completed Through | Week 8 |
 | Domain | Educational Technology / Academic Learning |
 | Architecture | Multi-Source RAG + Multi-LLM + Agentic Layer |
 | Primary Interface | Streamlit |
