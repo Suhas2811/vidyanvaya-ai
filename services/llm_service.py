@@ -23,7 +23,7 @@ llm = ChatGoogleGenerativeAI(
     api_key=GEMINI_API_KEY,
     temperature=1.0,
     max_retries=0,
-    request_timeout=45,
+    request_timeout=120,
 )
 
 

@@ -3122,7 +3122,7 @@ elif page == "📝 Practice":
                                 retrieve_relevant_chunks(
                                     query=exam_topic,
                                     source_name=selected_exam_document,
-                                    n_results=8
+                                    n_results=4
                                 )
                             )
 
