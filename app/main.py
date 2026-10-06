@@ -439,6 +439,100 @@ div[data-testid="stExpander"] {{
 .vv-rec h3 {{ margin: 6px 0 6px 0; font-size: 1.15rem; }}
 .vv-rec p {{ color: #4b5563; margin: 0; font-size: .9rem; line-height: 1.55; }}
 
+/* ---------- Advanced additions ---------- */
+/* In-page mode switches are driven by the sidebar now */
+.st-key-learn_mode, .st-key-practice_mode {{ display: none; }}
+
+.vv-chips {{ display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px 0; }}
+
+.vv-chip {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-radius: 999px;
+    padding: 4px 12px;
+    color: #374151;
+}}
+
+.vv-dot {{
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #16a34a;
+    margin-right: 6px;
+}}
+
+.vv-step.done i {{ background: #16a34a; }}
+.vv-step.todo i {{ background: #c7cbe6; }}
+
+.vv-step.active {{
+    background: {INDIGO_SOFT};
+    box-shadow: inset 0 0 0 1.5px {INDIGO};
+}}
+
+.vv-next {{
+    background: #ffffff;
+    border: 1px solid {LINE};
+    border-left: 4px solid {INDIGO};
+    border-radius: 16px;
+    padding: 16px 20px;
+}}
+
+.vv-next h4 {{ margin: 4px 0 4px 0; font-size: 1.05rem; color: {INK}; }}
+.vv-next p {{ margin: 0; color: #4b5563; font-size: .88rem; line-height: 1.5; }}
+
+.vv-two {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+}}
+
+.vv-two .vv-panel {{ margin-bottom: 0; }}
+.vv-panel h4 {{ margin: 0 0 6px 0; font-size: 1rem; color: {INK}; }}
+
+.vv-mrow {{
+    display: grid;
+    grid-template-columns: 1.3fr 2fr 44px;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+}}
+
+.vv-mrow .vv-bar {{ margin-top: 0; }}
+
+.vv-mname {{
+    font-size: .85rem;
+    font-weight: 550;
+    color: {INK};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}}
+
+.vv-act {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f1f7;
+}}
+
+.vv-act:last-child {{ border-bottom: none; }}
+
+.vv-badge {{
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: .74rem;
+    font-weight: 650;
+}}
+
+.vv-empty {{ color: {MUTED}; font-size: .88rem; margin: 8px 0 0 0; }}
+
+@media (max-width: 900px) {{
+    .vv-two {{ grid-template-columns: 1fr; }}
+}}
+
 @media (max-width: 900px) {{
     .vv-hero {{ flex-direction: column; }}
     .vv-flow {{ grid-template-columns: repeat(2, 1fr); }}
@@ -449,17 +543,209 @@ div[data-testid="stExpander"] {{
 
 
 # ==================================================
-# NAVIGATION CALLBACKS (used by the dashboard buttons)
+# NAVIGATION (flat menu that drives the existing pages)
 # ==================================================
 
-def _go(page, learn_mode=None, practice_mode=None) -> None:
-    st.session_state["main_navigation"] = page
+NAV_ITEMS = [
+    "🏠 Dashboard",
+    "📚 Materials",
+    "🔍 Subject Guide",
+    "📝 Question Bank",
+    "🧠 Question Solver",
+    "🎯 Exam Prep",
+    "📊 Performance",
+]
+
+# menu item -> (existing page, learn mode, practice mode)
+NAV_MAP = {
+    "🏠 Dashboard": ("🏠 Dashboard", None, None),
+    "📚 Materials": ("📚 Materials", None, None),
+    "🔍 Subject Guide": ("🧠 Learn", "🔍 Subject Guide", None),
+    "📝 Question Bank": ("📝 Practice", None, "📝 Question Bank"),
+    "🧠 Question Solver": ("🧠 Learn", "🧠 Question Solver", None),
+    "🎯 Exam Prep": ("📝 Practice", None, "🎯 Exam Preparation"),
+    "📊 Performance": ("📊 Performance", None, None),
+}
+
+
+def _nav_label(option) -> str:
+    """Sidebar label with a live count where it is useful."""
+    try:
+        document_total = len(get_document_names())
+    except Exception:
+        document_total = 0
+
+    counts = {
+        "📚 Materials": document_total,
+        "📝 Question Bank": len(
+            st.session_state.get("extracted_questions", [])
+        ),
+        "📊 Performance": len(
+            st.session_state.get("performance_history", [])
+        ),
+    }
+
+    count = counts.get(option, 0)
+
+    return f"{option}   ·   {count}" if count else option
+
+
+def resolve_navigation(nav_item) -> str:
+    """
+    Translate the sidebar choice into the existing page + mode,
+    so the original page code runs exactly as before.
+    """
+    page, learn_mode, practice_mode = NAV_MAP.get(
+        nav_item,
+        NAV_MAP["🏠 Dashboard"]
+    )
 
     if learn_mode:
         st.session_state["learn_mode"] = learn_mode
 
     if practice_mode:
         st.session_state["practice_mode"] = practice_mode
+
+    return page
+
+
+def _go(nav_item) -> None:
+    st.session_state["main_navigation"] = nav_item
+
+
+# ==================================================
+# SMALL VISUAL HELPERS
+# ==================================================
+
+def _record_pct(record) -> float:
+    """Percentage for one saved practice-test record."""
+    try:
+        if "percentage" in record:
+            return float(record["percentage"])
+
+        total = float(record.get("total_marks", 0))
+
+        if total > 0:
+            return float(record.get("score", 0)) / total * 100
+    except (TypeError, ValueError):
+        pass
+
+    return 0.0
+
+
+def _pct_color(pct) -> str:
+    if pct >= 75:
+        return "#16a34a"
+    if pct >= 50:
+        return "#d97706"
+    return "#dc2626"
+
+
+def _ring(pct, label, size=104) -> str:
+    """SVG progress ring."""
+    circumference = 2 * 3.14159 * 40
+    offset = circumference * (1 - max(0, min(100, pct)) / 100)
+
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 100 100">'
+        f'<circle cx="50" cy="50" r="40" fill="none" '
+        f'stroke="rgba(255,255,255,.16)" stroke-width="9"/>'
+        f'<circle cx="50" cy="50" r="40" fill="none" stroke="#a5b4fc" '
+        f'stroke-width="9" stroke-linecap="round" '
+        f'stroke-dasharray="{circumference:.1f}" '
+        f'stroke-dashoffset="{offset:.1f}" '
+        f'transform="rotate(-90 50 50)"/>'
+        f'<text x="50" y="57" text-anchor="middle" fill="#ffffff" '
+        f'font-size="21" font-weight="650" '
+        f'font-family="Inter, sans-serif">{_esc(label)}</text>'
+        f'</svg>'
+    )
+
+
+def _sparkline(values, width=150, height=38) -> str:
+    """SVG trend line (needs at least two points)."""
+    if len(values) < 2:
+        return ""
+
+    low, high = min(values), max(values)
+    span = (high - low) or 1
+    step = width / (len(values) - 1)
+
+    points = " ".join(
+        f"{index * step:.1f},"
+        f"{height - 4 - ((value - low) / span) * (height - 8):.1f}"
+        for index, value in enumerate(values)
+    )
+
+    return (
+        f'<svg width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">'
+        f'<polyline points="{points}" fill="none" stroke="{INDIGO}" '
+        f'stroke-width="2.2" stroke-linecap="round" '
+        f'stroke-linejoin="round"/></svg>'
+    )
+
+
+def _stage(doc_count, tests, recommendations) -> int:
+    """Which step of the mastery lifecycle the learner is on (1-7)."""
+    if doc_count == 0:
+        return 1
+    if tests == 0:
+        return 2
+    if recommendations:
+        return 6
+    return 7
+
+
+def _next_action(doc_count, question_count, tests, recommendations):
+    """Rule-based 'what should I do next' suggestion."""
+    if doc_count == 0:
+        return (
+            "Upload your first study material",
+            "Add notes, a textbook or a question paper so the AI has "
+            "something to learn from.",
+            "📚 Materials",
+            "Upload material",
+        )
+
+    if tests == 0:
+        return (
+            "Take your first practice test",
+            "A short test on any topic gives you a baseline and unlocks "
+            "weak-area tracking.",
+            "🎯 Exam Prep",
+            "Start a test",
+        )
+
+    if recommendations:
+        top = recommendations[0]
+        topic = top.get("topic", "your weakest topic")
+        pct = float(top.get("percentage", 0) or 0)
+
+        return (
+            f"Revise {topic}",
+            f"You are scoring {pct:.0f}% here. A focused practice test "
+            f"is the fastest way to move it up.",
+            "🎯 Exam Prep",
+            "Practice this topic",
+        )
+
+    if question_count == 0:
+        return (
+            "Extract a past question paper",
+            "Turn a previous-year paper into a question bank you can "
+            "solve with the AI.",
+            "📝 Question Bank",
+            "Open question bank",
+        )
+
+    return (
+        "Raise the difficulty",
+        "Your results look strong. Try a Hard practice test to keep "
+        "improving.",
+        "🎯 Exam Prep",
+        "Start a harder test",
+    )
 
 
 # ==================================================
@@ -500,16 +786,43 @@ def render_dashboard(
     percentage = float(overall.get("percentage", 0) or 0)
 
     doc_count = len(documents)
+    question_count = len(questions)
 
     user_name = str(user_name or "").strip()
-    welcome_text = f"Welcome back, {_esc(user_name)}." if user_name else "Welcome back."
-    greeting_text = f"{_greeting()}, {_esc(user_name)}" if user_name else _greeting()
+    welcome_text = (
+        f"Welcome back, {_esc(user_name)}."
+        if user_name else "Welcome back."
+    )
+    greeting_text = (
+        f"{_greeting()}, {_esc(user_name)}"
+        if user_name else _greeting()
+    )
 
-    # ---------- Page heading ----------
+    provider = ""
+
+    for key in ("exam_prep_provider", "question_bank_provider"):
+        value = str(st.session_state.get(key, "unknown") or "unknown")
+
+        if value.lower() not in ("unknown", "none", ""):
+            provider = value.capitalize()
+            break
+
+    provider_chip = (
+        f'<span class="vv-chip vv-mono">AI · {_esc(provider)}</span>'
+        if provider else ""
+    )
+
+    # ---------- Page heading + status chips ----------
     _html(f"""
 <div class="vv-mono vv-eyebrow">KNOWLEDGE BASE · {chunk_count:,} CHUNKS INDEXED</div>
 <h1 class="vv-page-title">Dashboard</h1>
 <div class="vv-page-sub">{welcome_text} Continue learning from your academic knowledge base.</div>
+<div class="vv-chips">
+<span class="vv-chip vv-mono"><span class="vv-dot"></span>RAG ENGINE ONLINE</span>
+<span class="vv-chip vv-mono">{doc_count} DOC{'S' if doc_count != 1 else ''}</span>
+<span class="vv-chip vv-mono">{question_count} QUESTION{'S' if question_count != 1 else ''}</span>
+{provider_chip}
+</div>
 """)
 
     # ---------- Hero ----------
@@ -526,7 +839,7 @@ def render_dashboard(
             "question papers to start learning."
         )
 
-    side_value = f"{percentage:.0f}%" if tests else "—"
+    ring_label = f"{percentage:.0f}%" if tests else "—"
     side_note = (
         f"Across {tests} practice test{'s' if tests != 1 else ''}"
         if tests
@@ -542,13 +855,15 @@ def render_dashboard(
 </div>
 <div class="vv-hero-side">
 <div class="vv-mono" style="color:#c7c9ee">PRACTICE ACCURACY</div>
-<div class="vv-big">{side_value}</div>
+<div class="vv-hero-ring">
+{_ring(percentage if tests else 0, ring_label)}
 <div class="vv-mono vv-note">{_esc(side_note)}</div>
+</div>
 </div>
 </div>
 """)
 
-    # ---------- Quick actions (real navigation) ----------
+    # ---------- Quick actions ----------
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
@@ -567,7 +882,7 @@ def render_dashboard(
             use_container_width=True,
             key="dash_explain",
             on_click=_go,
-            args=("🧠 Learn", "🔍 Subject Guide"),
+            args=("🔍 Subject Guide",),
         )
 
     with c3:
@@ -576,7 +891,7 @@ def render_dashboard(
             use_container_width=True,
             key="dash_solve",
             on_click=_go,
-            args=("🧠 Learn", "🧠 Question Solver"),
+            args=("🧠 Question Solver",),
         )
 
     with c4:
@@ -585,32 +900,88 @@ def render_dashboard(
             use_container_width=True,
             key="dash_practice",
             on_click=_go,
-            args=("📝 Practice", None, "🎯 Exam Preparation"),
+            args=("🎯 Exam Prep",),
         )
 
     st.write("")
 
-    # ---------- Workflow strip ----------
+    # ---------- Next best action ----------
+    (
+        next_title,
+        next_text,
+        next_target,
+        next_button,
+    ) = _next_action(
+        doc_count,
+        question_count,
+        tests,
+        recommendations
+    )
+
+    left, right = st.columns([4, 1])
+
+    with left:
+        _html(f"""
+<div class="vv-next">
+<div class="vv-mono vv-eyebrow">RECOMMENDED NEXT STEP</div>
+<h4>{_esc(next_title)}</h4>
+<p>{_esc(next_text)}</p>
+</div>
+""")
+
+    with right:
+        st.write("")
+        st.button(
+            next_button,
+            type="primary",
+            use_container_width=True,
+            key="dash_next_action",
+            on_click=_go,
+            args=(next_target,),
+        )
+
+    st.write("")
+
+    # ---------- Workflow strip (reflects real progress) ----------
     steps = [
         "Learn", "Practice", "Answer", "Evaluate",
         "Analyze", "Revise", "Improve",
     ]
 
-    step_html = "".join(
-        f'<div class="vv-step"><i>{number}</i>{name}</div>'
-        for number, name in enumerate(steps, start=1)
-    )
+    current = _stage(doc_count, tests, recommendations)
+
+    step_parts = []
+
+    for number, name in enumerate(steps, start=1):
+        if number < current:
+            state = "done"
+            mark = "✓"
+        elif number == current:
+            state = "active"
+            mark = str(number)
+        else:
+            state = "todo"
+            mark = str(number)
+
+        step_parts.append(
+            f'<div class="vv-step {state}"><i>{mark}</i>{name}</div>'
+        )
 
     _html(f"""
 <div class="vv-panel">
 <div class="vv-mono" style="color:{MUTED}">MASTERY LIFECYCLE WORKFLOW</div>
-<div class="vv-flow">{step_html}</div>
+<div class="vv-flow">{"".join(step_parts)}</div>
 </div>
 """)
 
     # ---------- Stat cards ----------
-    question_count = len(questions)
-    bar_width = max(0, min(100, percentage))
+    scores = [_record_pct(record) for record in history][-10:]
+    trend = _sparkline(scores)
+    trend_html = (
+        f'<div style="margin-top:10px">{trend}</div>'
+        if trend
+        else f'<div class="vv-mono" style="color:{MUTED};margin-top:10px">trend appears after 2 tests</div>'
+    )
 
     _html(f"""
 <div class="vv-stats">
@@ -627,12 +998,85 @@ def render_dashboard(
 <div class="vv-stat">
 <div class="vv-num">{percentage:.0f}%</div>
 <div class="vv-label">Practice accuracy</div>
-<div class="vv-bar"><span style="width:{bar_width}%"></span></div>
+{trend_html}
 </div>
 <div class="vv-stat">
 <div class="vv-num">{len(topics)}</div>
 <div class="vv-label">Topics tracked</div>
 <div class="vv-mono" style="color:{MUTED};margin-top:8px">{tests} test{'s' if tests != 1 else ''} attempted</div>
+</div>
+</div>
+""")
+
+    # ---------- Topic mastery + recent activity ----------
+    if topics:
+        ordered = sorted(
+            topics.items(),
+            key=lambda item: float(item[1].get("percentage", 0) or 0)
+        )[:6]
+
+        mastery_rows = ""
+
+        for topic_name, topic_data in ordered:
+            topic_pct = float(topic_data.get("percentage", 0) or 0)
+            color = _pct_color(topic_pct)
+
+            mastery_rows += (
+                f'<div class="vv-mrow">'
+                f'<div class="vv-mname">{_esc(topic_name)}</div>'
+                f'<div class="vv-bar"><span style="width:{max(0, min(100, topic_pct)):.0f}%;background:{color}"></span></div>'
+                f'<div class="vv-mono" style="text-align:right">{topic_pct:.0f}%</div>'
+                f'</div>'
+            )
+    else:
+        mastery_rows = (
+            '<p class="vv-empty">Topic mastery appears after your '
+            'first practice test.</p>'
+        )
+
+    if history:
+        activity_rows = ""
+
+        for record in list(reversed(history))[:5]:
+            record_pct = _record_pct(record)
+            color = _pct_color(record_pct)
+
+            try:
+                score_text = (
+                    f"{float(record.get('score', 0)):g}/"
+                    f"{float(record.get('total_marks', 0)):g}"
+                )
+            except (TypeError, ValueError):
+                score_text = "—"
+
+            topic_text = _esc(record.get("topic", "Unknown"))
+            difficulty_text = _esc(record.get("difficulty", "—"))
+
+            activity_rows += (
+                f'<div class="vv-act"><div>'
+                f'<div style="font-weight:600;font-size:.88rem;color:{INK}">{topic_text}</div>'
+                f'<div class="vv-mono" style="color:{MUTED}">{difficulty_text} · {score_text}</div>'
+                f'</div>'
+                f'<span class="vv-badge" style="background:{color}1a;color:{color}">{record_pct:.0f}%</span>'
+                f'</div>'
+            )
+    else:
+        activity_rows = (
+            '<p class="vv-empty">No practice tests yet. Your last five '
+            'results will be listed here.</p>'
+        )
+
+    _html(f"""
+<div class="vv-two">
+<div class="vv-panel">
+<h4>Topic mastery</h4>
+<div class="vv-mono" style="color:{MUTED}">WEAKEST FIRST</div>
+{mastery_rows}
+</div>
+<div class="vv-panel">
+<h4>Recent practice</h4>
+<div class="vv-mono" style="color:{MUTED}">LAST 5 TESTS</div>
+{activity_rows}
 </div>
 </div>
 """)
@@ -660,6 +1104,93 @@ recommendations will appear here.
 </div>
 """)
 
+
+# ==================================================
+# PERFORMANCE INSIGHTS (shown above your existing dashboard)
+# ==================================================
+
+def render_performance_insights(history) -> None:
+    """Trend, improvement and difficulty analysis. Adds to, not replaces,
+    display_performance_dashboard()."""
+
+    if not history:
+        return
+
+    percentages = [_record_pct(record) for record in history]
+    count = len(percentages)
+
+    average = sum(percentages) / count
+    best = max(percentages)
+
+    window = max(1, min(3, count // 2))
+
+    if count >= 2:
+        delta = (
+            sum(percentages[-window:]) / window
+            - sum(percentages[:window]) / window
+        )
+    else:
+        delta = 0.0
+
+    by_topic = {}
+    by_difficulty = {}
+
+    for record, value in zip(history, percentages):
+        by_topic.setdefault(
+            str(record.get("topic", "Unknown")), []
+        ).append(value)
+
+        by_difficulty.setdefault(
+            str(record.get("difficulty", "Unknown")), []
+        ).append(value)
+
+    topic_means = {
+        topic: sum(values) / len(values)
+        for topic, values in by_topic.items()
+    }
+
+    weakest = min(topic_means, key=topic_means.get)
+
+    delta_color = "#16a34a" if delta >= 0 else "#dc2626"
+    delta_text = f"{delta:+.1f} pts" if count >= 2 else "—"
+
+    st.subheader("🚀 Insights")
+
+    _html(f"""
+<div class="vv-stats">
+<div class="vv-stat">
+<div class="vv-num">{average:.0f}%</div>
+<div class="vv-label">Average score</div>
+</div>
+<div class="vv-stat">
+<div class="vv-num">{best:.0f}%</div>
+<div class="vv-label">Best test</div>
+</div>
+<div class="vv-stat">
+<div class="vv-num" style="color:{delta_color}">{delta_text}</div>
+<div class="vv-label">Improvement (early vs recent)</div>
+</div>
+<div class="vv-stat">
+<div class="vv-num" style="font-size:1.25rem;line-height:1.5">{_esc(weakest)}</div>
+<div class="vv-label">Weakest topic · {topic_means[weakest]:.0f}%</div>
+</div>
+</div>
+""")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.caption("Score trend across tests (%)")
+        st.line_chart({"Score %": percentages})
+
+    with col2:
+        st.caption("Average score by difficulty (%)")
+        st.bar_chart({
+            difficulty: sum(values) / len(values)
+            for difficulty, values in by_difficulty.items()
+        })
+
+    st.divider()
 
 
 # ==================================================
@@ -1677,17 +2208,15 @@ st.sidebar.text_input(
     placeholder="Optional"
 )
 
-page = st.sidebar.radio(
+nav_item = st.sidebar.radio(
     "Navigate",
-    [
-        "🏠 Dashboard",
-        "📚 Materials",
-        "🧠 Learn",
-        "📝 Practice",
-        "📊 Performance",
-    ],
-    key="main_navigation"
+    NAV_ITEMS,
+    key="main_navigation",
+    format_func=_nav_label,
+    label_visibility="collapsed"
 )
+
+page = resolve_navigation(nav_item)
 
 st.sidebar.divider()
 
@@ -3082,6 +3611,10 @@ elif page == "📊 Performance":
     )
 
     st.divider()
+
+    render_performance_insights(
+        st.session_state["performance_history"]
+    )
 
     display_performance_dashboard()
 
